@@ -884,6 +884,7 @@ CXXABI *ASTContext::createCXXABI(const TargetInfo &T) {
 
   switch (T.getCXXABI().getKind()) {
   case TargetCXXABI::AppleARM64:
+  case TargetCXXABI::CodeWarrior:
   case TargetCXXABI::Fuchsia:
   case TargetCXXABI::GenericARM: // Same as Itanium at this level
   case TargetCXXABI::iOS:
@@ -10884,6 +10885,8 @@ MangleContext *ASTContext::createMangleContext(const TargetInfo *T) {
     return ItaniumMangleContext::create(*this, getDiagnostics());
   case TargetCXXABI::Microsoft:
     return MicrosoftMangleContext::create(*this, getDiagnostics());
+  case TargetCXXABI::CodeWarrior:
+    return MacintoshMangleContext::create(*this, getDiagnostics());
   }
   llvm_unreachable("Unsupported ABI");
 }

@@ -171,6 +171,7 @@ public:
     Fuchsia,
     IOS,
     KFreeBSD,
+    Kuribo,
     Linux,
     Lv2,        // PS3
     MacOSX,

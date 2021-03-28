@@ -360,11 +360,13 @@ public:
     else
       resetDataLayout("E-m:e-p:32:32-i64:64-n32");
 
+
     switch (getTriple().getOS()) {
     case llvm::Triple::Linux:
     case llvm::Triple::FreeBSD:
     case llvm::Triple::NetBSD:
-      SizeType = UnsignedInt;
+    case llvm::Triple::Kuribo:
+      SizeType = UnsignedLong;
       PtrDiffType = SignedInt;
       IntPtrType = SignedInt;
       break;
@@ -386,6 +388,12 @@ public:
       LongDoubleFormat = &llvm::APFloat::IEEEdouble();
     }
 
+    else if (getTriple().getOS() == llvm::Triple::Kuribo) {
+      LongDoubleWidth = LongDoubleAlign = 64;
+      LongDoubleFormat = &llvm::APFloat::IEEEdouble();
+      TheCXXABI.set(TargetCXXABI::CodeWarrior);
+    }
+ 
     // PPC32 supports atomics up to 4 bytes.
     MaxAtomicPromoteWidth = MaxAtomicInlineWidth = 32;
   }

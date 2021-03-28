@@ -10274,7 +10274,7 @@ void Sema::CheckConstructor(CXXConstructorDecl *Constructor) {
 bool Sema::CheckDestructor(CXXDestructorDecl *Destructor) {
   CXXRecordDecl *RD = Destructor->getParent();
 
-  if (!Destructor->getOperatorDelete() && Destructor->isVirtual()) {
+  if (!Destructor->getOperatorDelete() && (Destructor->isVirtual()||Context.getTargetInfo().getCXXABI() == TargetCXXABI::CodeWarrior)) {
     SourceLocation Loc;
 
     if (!Destructor->isImplicit())
@@ -13334,7 +13334,6 @@ void Sema::DefineImplicitDestructor(SourceLocation CurrentLocation,
 
   MarkBaseAndMemberDestructorsReferenced(Destructor->getLocation(),
                                          Destructor->getParent());
-
   if (CheckDestructor(Destructor)) {
     Destructor->setInvalidDecl();
     return;

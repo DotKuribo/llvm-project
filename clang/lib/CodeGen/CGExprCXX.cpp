@@ -379,9 +379,15 @@ RValue CodeGenFunction::EmitCXXMemberOrOperatorMemberCallExpr(
 
       QualType ThisTy =
           IsArrow ? Base->getType()->getPointeeType() : Base->getType();
-      EmitCXXDestructorCall(GD, Callee, This.getPointer(*this), ThisTy,
-                            /*ImplicitParam=*/nullptr,
-                            /*ImplicitParamTy=*/QualType(), CE);
+      if (CGM.getContext().getTargetInfo().getCXXABI() == TargetCXXABI::CodeWarrior) {
+        EmitCXXDestructorCall(GD, Callee, This.getPointer(*this), ThisTy,
+                              llvm::ConstantInt::get(CGM.Int32Ty, -1, true),
+                              getContext().IntTy, CE);
+      } else {
+        EmitCXXDestructorCall(GD, Callee, This.getPointer(*this), ThisTy,
+                              /*ImplicitParam=*/nullptr,
+                              /*ImplicitParamTy=*/QualType(), CE);
+      }
     }
     return RValue::get(nullptr);
   }
@@ -1906,7 +1912,7 @@ static bool EmitObjectDelete(CodeGenFunction &CGF,
   const CXXDestructorDecl *Dtor = nullptr;
   if (const RecordType *RT = ElementType->getAs<RecordType>()) {
     CXXRecordDecl *RD = cast<CXXRecordDecl>(RT->getDecl());
-    if (RD->hasDefinition() && !RD->hasTrivialDestructor()) {
+    if (RD->hasDefinition() && (!RD->hasTrivialDestructor() || CGF.getContext().getTargetInfo().getCXXABI() == TargetCXXABI::CodeWarrior)) {
       Dtor = RD->getDestructor();
 
       if (Dtor->isVirtual()) {
@@ -1944,41 +1950,75 @@ static bool EmitObjectDelete(CodeGenFunction &CGF,
   // Make sure that we call delete even if the dtor throws.
   // This doesn't have to a conditional cleanup because we're going
   // to pop it off in a second.
-  CGF.EHStack.pushCleanup<CallObjectDelete>(NormalAndEHCleanup,
-                                            Ptr.getPointer(),
-                                            OperatorDelete, ElementType);
-
-  if (Dtor)
-    CGF.EmitCXXDestructorCall(Dtor, Dtor_Complete,
-                              /*ForVirtualBase=*/false,
-                              /*Delegating=*/false,
-                              Ptr, ElementType);
-  else if (auto Lifetime = ElementType.getObjCLifetime()) {
-    switch (Lifetime) {
-    case Qualifiers::OCL_None:
-    case Qualifiers::OCL_ExplicitNone:
-    case Qualifiers::OCL_Autoreleasing:
-      break;
-
-    case Qualifiers::OCL_Strong:
-      CGF.EmitARCDestroyStrong(Ptr, ARCPreciseLifetime);
-      break;
-
-    case Qualifiers::OCL_Weak:
-      CGF.EmitARCDestroyWeak(Ptr);
-      break;
+  if (CGF.getContext().getTargetInfo().getCXXABI() == TargetCXXABI::CodeWarrior) {
+    if (Dtor) {
+      CGF.EmitCXXDestructorCall(Dtor, Dtor_Deleting,
+                                /*ForVirtualBase=*/false,
+                                /*Delegating=*/false,
+                                Ptr, ElementType);
     }
-  }
+    else if (auto Lifetime = ElementType.getObjCLifetime()) {
+      switch (Lifetime) {
+      case Qualifiers::OCL_None:
+      case Qualifiers::OCL_ExplicitNone:
+      case Qualifiers::OCL_Autoreleasing:
+        break;
 
-  // When optimizing for size, call 'operator delete' unconditionally.
-  if (CGF.CGM.getCodeGenOpts().OptimizeSize > 1) {
-    CGF.EmitBlock(UnconditionalDeleteBlock);
+      case Qualifiers::OCL_Strong:
+        CGF.EmitARCDestroyStrong(Ptr, ARCPreciseLifetime);
+        break;
+
+      case Qualifiers::OCL_Weak:
+        CGF.EmitARCDestroyWeak(Ptr);
+        break;
+      }
+    }
+
+    // When optimizing for size, call 'operator delete' unconditionally.
+    if (CGF.CGM.getCodeGenOpts().OptimizeSize > 1) {
+      CGF.EmitBlock(UnconditionalDeleteBlock);
+      return true;
+    }
+    return false;
+
+  } else {
+    CGF.EHStack.pushCleanup<CallObjectDelete>(NormalAndEHCleanup,
+                                              Ptr.getPointer(),
+                                              OperatorDelete, ElementType);
+
+    if (Dtor) {
+      CGF.EmitCXXDestructorCall(Dtor, Dtor_Complete,
+                                /*ForVirtualBase=*/false,
+                                /*Delegating=*/false,
+                                Ptr, ElementType);
+    }
+    else if (auto Lifetime = ElementType.getObjCLifetime()) {
+      switch (Lifetime) {
+      case Qualifiers::OCL_None:
+      case Qualifiers::OCL_ExplicitNone:
+      case Qualifiers::OCL_Autoreleasing:
+        break;
+
+      case Qualifiers::OCL_Strong:
+        CGF.EmitARCDestroyStrong(Ptr, ARCPreciseLifetime);
+        break;
+
+      case Qualifiers::OCL_Weak:
+        CGF.EmitARCDestroyWeak(Ptr);
+        break;
+      }
+    }
+
+    // When optimizing for size, call 'operator delete' unconditionally.
+    if (CGF.CGM.getCodeGenOpts().OptimizeSize > 1) {
+      CGF.EmitBlock(UnconditionalDeleteBlock);
+      CGF.PopCleanupBlock();
+      return true;
+    }
+
     CGF.PopCleanupBlock();
-    return true;
+    return false;
   }
-
-  CGF.PopCleanupBlock();
-  return false;
 }
 
 namespace {

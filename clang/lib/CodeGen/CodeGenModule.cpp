@@ -89,6 +89,8 @@ static CGCXXABI *createCXXABI(CodeGenModule &CGM) {
     return CreateItaniumCXXABI(CGM);
   case TargetCXXABI::Microsoft:
     return CreateMicrosoftCXXABI(CGM);
+  case TargetCXXABI::CodeWarrior:
+    return CreateItaniumCXXABI(CGM);
   }
 
   llvm_unreachable("invalid C++ ABI kind");
@@ -249,6 +251,7 @@ void CodeGenModule::applyReplacements() {
       continue;
     auto *OldF = cast<llvm::Function>(Entry);
     auto *NewF = dyn_cast<llvm::Function>(Replacement);
+
     if (!NewF) {
       if (auto *Alias = dyn_cast<llvm::GlobalAlias>(Replacement)) {
         NewF = dyn_cast<llvm::Function>(Alias->getAliasee());

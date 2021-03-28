@@ -1306,8 +1306,9 @@ void ItaniumVTableBuilder::AddMethod(const CXXMethodDecl *MD,
     assert(ReturnAdjustment.isEmpty() &&
            "Destructor can't have return adjustment!");
 
-    // Add both the complete destructor and the deleting destructor.
-    Components.push_back(VTableComponent::MakeCompleteDtor(DD));
+    if (Context.getTargetInfo().getCXXABI() != TargetCXXABI::CodeWarrior)
+      // Add both the complete destructor and the deleting destructor.
+      Components.push_back(VTableComponent::MakeCompleteDtor(DD));
     Components.push_back(VTableComponent::MakeDeletingDtor(DD));
   } else {
     // Add the return adjustment if necessary.
@@ -1661,12 +1662,21 @@ void ItaniumVTableBuilder::LayoutPrimaryAndSecondaryVTables(
   if (Base.getBase() == MostDerivedClass)
     VBaseOffsetOffsets = Builder.getVBaseOffsetOffsets();
 
-  // Add the offset to top.
-  CharUnits OffsetToTop = MostDerivedClassOffset - OffsetInLayoutClass;
-  Components.push_back(VTableComponent::MakeOffsetToTop(OffsetToTop));
+  if (Context.getTargetInfo().getCXXABI() == TargetCXXABI::CodeWarrior) {
+    // Add the RTTI.
+    Components.push_back(VTableComponent::MakeRTTI(MostDerivedClass));
 
-  // Next, add the RTTI.
-  Components.push_back(VTableComponent::MakeRTTI(MostDerivedClass));
+    // Next add the offset to top.
+    CharUnits OffsetToTop = MostDerivedClassOffset - OffsetInLayoutClass;
+    Components.push_back(VTableComponent::MakeOffsetToTop(OffsetToTop));
+  } else {
+    // Add the offset to top.
+    CharUnits OffsetToTop = MostDerivedClassOffset - OffsetInLayoutClass;
+    Components.push_back(VTableComponent::MakeOffsetToTop(OffsetToTop));
+
+    // Next, add the RTTI.
+    Components.push_back(VTableComponent::MakeRTTI(MostDerivedClass));
+  }
 
   uint64_t AddressPoint = Components.size();
 
@@ -1683,10 +1693,17 @@ void ItaniumVTableBuilder::LayoutPrimaryAndSecondaryVTables(
       const CXXMethodDecl *MD = I.first;
       const MethodInfo &MI = I.second;
       if (const CXXDestructorDecl *DD = dyn_cast<CXXDestructorDecl>(MD)) {
-        MethodVTableIndices[GlobalDecl(DD, Dtor_Complete)]
-            = MI.VTableIndex - AddressPoint;
-        MethodVTableIndices[GlobalDecl(DD, Dtor_Deleting)]
-            = MI.VTableIndex + 1 - AddressPoint;
+        if (Context.getTargetInfo().getCXXABI() == TargetCXXABI::CodeWarrior) {
+          MethodVTableIndices[GlobalDecl(DD, Dtor_Complete)]
+              = MI.VTableIndex - AddressPoint;
+          MethodVTableIndices[GlobalDecl(DD, Dtor_Deleting)]
+              = MI.VTableIndex - AddressPoint;
+        } else {
+          MethodVTableIndices[GlobalDecl(DD, Dtor_Complete)]
+              = MI.VTableIndex - AddressPoint;
+          MethodVTableIndices[GlobalDecl(DD, Dtor_Deleting)]
+              = MI.VTableIndex + 1 - AddressPoint;
+        }
       } else {
         MethodVTableIndices[MD] = MI.VTableIndex - AddressPoint;
       }
@@ -2181,8 +2198,12 @@ void ItaniumVTableBuilder::dumpLayout(raw_ostream &Out) {
       GlobalDecl GD(DD, Dtor_Complete);
       assert(MethodVTableIndices.count(GD));
       uint64_t VTableIndex = MethodVTableIndices[GD];
-      IndicesMap[VTableIndex] = MethodName + " [complete]";
-      IndicesMap[VTableIndex + 1] = MethodName + " [deleting]";
+      if (Context.getTargetInfo().getCXXABI() == TargetCXXABI::CodeWarrior) {
+        IndicesMap[VTableIndex] = MethodName + " [deleting]";
+      } else {
+        IndicesMap[VTableIndex] = MethodName + " [complete]";
+        IndicesMap[VTableIndex + 1] = MethodName + " [deleting]";
+      }
     } else {
       assert(MethodVTableIndices.count(MD));
       IndicesMap[MethodVTableIndices[MD]] = MethodName;

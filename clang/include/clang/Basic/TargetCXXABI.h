@@ -32,7 +32,14 @@ public:
     /// It is documented here:
     ///   http://www.codesourcery.com/public/cxx-abi/
     GenericItanium,
-
+        
+    /// The generic Itanium ABI is the standard ABI of most open-source
+    /// and Unix-like platforms.  It is the primary ABI targeted by
+    /// many compilers, including Clang and GCC.
+    ///
+    /// It is documented here:
+    ///   http://www.codesourcery.com/public/cxx-abi/
+    CodeWarrior,
     /// The generic ARM ABI is a modified version of the Itanium ABI
     /// proposed by ARM for use on ARM-based platforms.
     ///
@@ -151,6 +158,7 @@ public:
     case Fuchsia:
     case GenericAArch64:
     case GenericItanium:
+    case CodeWarrior:
     case GenericARM:
     case iOS:
     case WatchOS:
@@ -172,6 +180,7 @@ public:
     case Fuchsia:
     case GenericAArch64:
     case GenericItanium:
+    case CodeWarrior:
     case GenericARM:
     case iOS:
     case WatchOS:
@@ -209,6 +218,7 @@ public:
       //       the this adjustment, so they don't require functions to have any
       //       special alignment and could therefore also return false.
     case GenericItanium:
+    case CodeWarrior:
     case iOS:
     case WatchOS:
     case Microsoft:
@@ -232,6 +242,8 @@ public:
   /// Does this ABI have different entrypoints for complete-object
   /// and base-subobject constructors?
   bool hasConstructorVariants() const {
+    if (getKind() == CodeWarrior)
+      return false;
     return isItaniumFamily();
   }
 
@@ -286,6 +298,7 @@ public:
 
     case GenericAArch64:
     case GenericItanium:
+    case CodeWarrior:
     case iOS:   // old iOS compilers did not follow this rule
     case Microsoft:
     case GenericMIPS:
@@ -323,6 +336,7 @@ public:
     // permanently locked the definition of POD to the rules of C++ TR1,
     // and that trickles down to derived ABIs.
     case GenericItanium:
+    case CodeWarrior:
     case GenericAArch64:
     case GenericARM:
     case iOS:

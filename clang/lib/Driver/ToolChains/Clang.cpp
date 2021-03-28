@@ -552,6 +552,9 @@ static bool useFramePointerForTargetByDefault(const ArgList &Args,
       if (Triple.isAndroid())
         return true;
       LLVM_FALLTHROUGH;
+    case llvm::Triple::ppc:
+      if (Triple.getOS() == llvm::Triple::Kuribo)
+        return false;
     case llvm::Triple::mips64:
     case llvm::Triple::mips64el:
     case llvm::Triple::mips:
