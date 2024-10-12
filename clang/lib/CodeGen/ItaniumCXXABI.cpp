@@ -550,7 +550,7 @@ public:
 
   CGCallee getVirtualFunctionPointer(CodeGenFunction &CGF, GlobalDecl GD,
                                      Address This, llvm::Type *Ty,
-                                     SourceLocation Loc);
+                                     SourceLocation Loc) override;
 
   llvm::Constant *
   getVTableAddressPoint(BaseSubobject Base,
@@ -833,8 +833,8 @@ CGCallee ItaniumCXXABI::EmitLoadOfMemberFunctionPointer(
   llvm::Value *VTablePtr = This;
   // Add the vtable offset to 'this'.
   if (UseMacintoshMethodPtrABI) {
-    llvm::Value *Ptr = Builder.CreateBitCast(This, Builder.getInt8PtrTy());
-    Ptr = Builder.CreateInBoundsGEP(Ptr, VTableAdj);
+    llvm::Value *Ptr = Builder.CreateBitCast(This, VTableTy);
+    Ptr = Builder.CreateInBoundsGEP(VTableTy, Ptr, VTableAdj);
     VTablePtr = Builder.CreateBitCast(Ptr, VTableTy, "memptr.vtable");
   }
   llvm::Value *VTable = CGF.GetVTablePtr(
@@ -5719,15 +5719,18 @@ CGCallee MacintoshCXXABI::getVirtualFunctionPointer(CodeGenFunction &CGF,
                                                     SourceLocation Loc) {
   auto *MethodDecl = cast<CXXMethodDecl>(GD.getDecl());
 
+  llvm::Type *VTableTy = Ty->getPointerTo()->getPointerTo();
   llvm::Value *VTable = CGF.GetVTablePtr(
-      This, Ty->getPointerTo()->getPointerTo(), MethodDecl->getParent());
+      This, VTableTy, MethodDecl->getParent());
 
   uint64_t VTableIndex = CGM.getItaniumVTableContext().getMethodVTableIndex(GD);
   llvm::Value *VFunc;
   if (CGF.ShouldEmitVTableTypeCheckedLoad(MethodDecl->getParent())) {
     VFunc = CGF.EmitVTableTypeCheckedLoad(
-        MethodDecl->getParent(), VTable,
-        VTableIndex * CGM.getContext().getTargetInfo().getPointerWidth(0) / 8);
+        MethodDecl->getParent(), VTable, VTableTy,
+        VTableIndex *
+            CGM.getContext().getTargetInfo().getPointerWidth(LangAS::Default) /
+            8);
   } else {
     CGF.EmitTypeMetadataCodeForVCall(MethodDecl->getParent(), VTable, Loc);
 
@@ -5743,9 +5746,9 @@ CGCallee MacintoshCXXABI::getVirtualFunctionPointer(CodeGenFunction &CGF,
           CGF.Builder.CreateBitCast(VTable, Ty->getPointerTo()->getPointerTo());
 
       llvm::Value *VTableSlotPtr = CGF.Builder.CreateConstInBoundsGEP1_64(
-          VTable, VTableIndex + 2, "vfn");
+          Ty->getPointerTo(), VTable, VTableIndex + 2, "vfn");
       VFuncLoad =
-          CGF.Builder.CreateAlignedLoad(VTableSlotPtr, CGF.getPointerAlign());
+          CGF.Builder.CreateAlignedLoad(Ty->getPointerTo(), VTableSlotPtr, CGF.getPointerAlign());
     }
 
     // Add !invariant.load md to virtual function load to indicate that
@@ -5788,9 +5791,10 @@ MacintoshCXXABI::getVTableAddressPoint(BaseSubobject Base,
       llvm::ConstantInt::get(CGM.Int32Ty, AddressPoint.AddressPointIndex - 2),
   };
 
-  return llvm::ConstantExpr::getGetElementPtr(VTable->getValueType(), VTable,
-                                              Indices, /*InBounds=*/true,
-                                              /*InRangeIndex=*/1);
+  return llvm::ConstantExpr::getGetElementPtr(
+      VTable->getValueType(), VTable, Indices,
+      /*NW=*/llvm::GEPNoWrapFlags::inBounds(),
+      /*InRange=*/llvm::ConstantRange(llvm::APInt(32, 1)));
 }
 
 void MacintoshCXXABI::addImplicitStructorParams(CodeGenFunction &CGF,
@@ -5806,7 +5810,7 @@ void MacintoshCXXABI::addImplicitStructorParams(CodeGenFunction &CGF,
     QualType T = Context.IntTy;
     auto *DtorTypeDecl = ImplicitParamDecl::Create(
         Context, /*DC=*/nullptr, MD->getLocation(), &Context.Idents.get("int"),
-        T, ImplicitParamDecl::CXXVTT);
+        T, ImplicitParamKind::CXXVTT);
     Params.insert(Params.begin() + 1, DtorTypeDecl);
     getStructorImplicitParamDecl(CGF) = DtorTypeDecl;
   }
@@ -5846,7 +5850,7 @@ void MacintoshCXXABI::EmitDestructorCall(CodeGenFunction &CGF,
   else
     Callee = CGCallee::forDirect(CGM.getAddrOfCXXStructor(GD), GD);
 
-  CGF.EmitCXXDestructorCall(GD, Callee, This.getPointer(), ThisTy, Deleting,
+  CGF.EmitCXXDestructorCall(GD, Callee, This.getBasePointer(), ThisTy, Deleting,
                             DeletingTy, nullptr);
 }
 
@@ -5874,7 +5878,7 @@ llvm::Value *MacintoshCXXABI::EmitVirtualDestructorCall(
   } else {
     ThisTy = D->getDestroyedType();
   }
-  CGF.EmitCXXDestructorCall(GD, Callee, This.getPointer(), ThisTy, Deleting,
+  CGF.EmitCXXDestructorCall(GD, Callee, This.getBasePointer(), ThisTy, Deleting,
                             DeletingTy, nullptr);
   return nullptr;
 }

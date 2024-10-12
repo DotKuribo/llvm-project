@@ -29,8 +29,8 @@
 #include "clang/AST/Mangle.h"
 #include "clang/AST/TypeLoc.h"
 #include "clang/Basic/ABI.h"
-#include "clang/Basic/SourceManager.h"
 #include "clang/Basic/TargetInfo.h"
+#include "clang/Basic/Thunk.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
@@ -83,6 +83,8 @@ static const DeclContext *getEffectiveParentContext(const DeclContext *DC) {
   return getEffectiveDeclContext(cast<Decl>(DC));
 }
 
+#if 0
+
 static bool isLocalContainerContext(const DeclContext *DC) {
   return isa<FunctionDecl>(DC) || isa<ObjCMethodDecl>(DC) || isa<BlockDecl>(DC);
 }
@@ -120,6 +122,8 @@ static bool isLambda(const NamedDecl *ND) {
 
 static const unsigned UnknownArity = ~0U;
 
+#endif
+
 class MacintoshMangleContextImpl : public MacintoshMangleContext {
 public:
   explicit MacintoshMangleContextImpl(ASTContext &Context,
@@ -129,32 +133,37 @@ public:
   /// @name Mangler Entry Points
   /// @{
 
-  bool shouldMangleCXXName(const NamedDecl *D);
-  bool shouldMangleStringLiteral(const StringLiteral *) { return false; }
+  bool shouldMangleCXXName(const NamedDecl *D) override;
+  bool shouldMangleStringLiteral(const StringLiteral *) override {
+    return false;
+  }
   void mangleCXXName(GlobalDecl GD, raw_ostream &) override;
   void mangleThunk(const CXXMethodDecl *MD, const ThunkInfo &Thunk,
-                   raw_ostream &) override;
+                   bool ElideOverrideInfo, raw_ostream &) override;
   void mangleCXXDtorThunk(const CXXDestructorDecl *DD, CXXDtorType Type,
-                          const ThisAdjustment &ThisAdjustment,
+                          const ThunkInfo &Thunk, bool ElideOverrideInfo,
                           raw_ostream &) override;
   void mangleReferenceTemporary(const VarDecl *D, unsigned ManglingNumber,
                                 raw_ostream &) override;
   void mangleCXXRTTI(QualType T, raw_ostream &) override;
-  void mangleCXXRTTIName(QualType T, raw_ostream &) override;
-  void mangleTypeName(QualType T, raw_ostream &) override;
+  void mangleCXXRTTIName(QualType T, raw_ostream &,
+                         bool NormalizeIntegers = false) override;
+  void mangleTypeName(QualType T, raw_ostream &);
   void mangleCXXCtor(const CXXConstructorDecl *D, CXXCtorType Type,
                      raw_ostream &);
   void mangleCXXDtor(const CXXDestructorDecl *D, CXXDtorType Type,
                      raw_ostream &);
 
-  void mangleStaticGuardVariable(const VarDecl *D, raw_ostream &);
-  void mangleDynamicInitializer(const VarDecl *D, raw_ostream &Out);
-  void mangleDynamicAtExitDestructor(const VarDecl *D, raw_ostream &Out);
-  void mangleSEHFilterExpression(const NamedDecl *EnclosingDecl,
-                                 raw_ostream &Out);
-  void mangleSEHFinallyBlock(const NamedDecl *EnclosingDecl, raw_ostream &Out);
+  void mangleStaticGuardVariable(const VarDecl *D, raw_ostream &) override;
+  void mangleDynamicInitializer(const VarDecl *D, raw_ostream &Out) override;
+  void mangleDynamicAtExitDestructor(const VarDecl *D,
+                                     raw_ostream &Out) override;
+  void mangleSEHFilterExpression(GlobalDecl EnclosingDecl,
+                                 raw_ostream &Out) override;
+  void mangleSEHFinallyBlock(GlobalDecl EnclosingDecl,
+                             raw_ostream &Out) override;
 
-  void mangleStringLiteral(const StringLiteral *, raw_ostream &);
+  void mangleStringLiteral(const StringLiteral *, raw_ostream &) override;
 
   void mangleCXXVTable(const CXXRecordDecl *RD, raw_ostream &) override;
   void mangleCXXVTT(const CXXRecordDecl *RD, raw_ostream &) override;
@@ -169,6 +178,17 @@ public:
 
   void mangleLambdaSig(const CXXRecordDecl *Lambda, raw_ostream &Out) override;
   void mangleDynamicStermFinalizer(const VarDecl *D, raw_ostream &Out) override;
+
+  void mangleCanonicalTypeName(QualType T, raw_ostream &,
+                               bool NormalizeIntegers = false) override;
+
+  void mangleModuleInitializer(const Module *Module, raw_ostream &) override;
+
+  virtual DiscriminatorOverrideTy getDiscriminatorOverride() const override {
+    return [](ASTContext &, const NamedDecl *) -> std::optional<unsigned> {
+      return std::nullopt;
+    };
+  }
 
   std::string getLambdaString(const CXXRecordDecl *Lambda) override {
     // This function matches the one in MicrosoftMangle, which returns
@@ -249,7 +269,7 @@ bool MacintoshMangleContextImpl::shouldMangleCXXName(const NamedDecl *D) {
     if ((DC->isFunctionOrMethod() && D->hasLinkage()))
       while (!DC->isNamespace() && !DC->isTranslationUnit())
         DC = getEffectiveParentContext(DC);
-    if (DC->isTranslationUnit() && D->getFormalLinkage() != InternalLinkage &&
+    if (DC->isTranslationUnit() && D->getFormalLinkage() != Linkage::Internal &&
         !isa<VarTemplateSpecializationDecl>(D))
       return false;
   }
@@ -294,10 +314,14 @@ static void MangleTemplateSpecialization(const TemplateArgumentList &List,
 static void MangleTemplateSpecialization(
     const DependentFunctionTemplateSpecializationInfo &List,
     const ASTContext &Ctx, raw_ostream &Out) {
+  const ASTTemplateArgumentListInfo *Info = List.TemplateArgumentsAsWritten;
+  assert(Info &&
+         "DependentFunctionTemplateSpecializationInfo has no arguments");
+
   Out << '<';
   bool NeedsComma = false;
-  const TemplateArgumentLoc *Args = List.getTemplateArgs();
-  for (unsigned i = 0; i < List.getNumTemplateArgs(); ++i) {
+  const TemplateArgumentLoc *Args = Info->getTemplateArgs();
+  for (unsigned i = 0; i < Info->getNumTemplateArgs(); ++i) {
     const TemplateArgument &Arg = Args[i].getArgument();
     MangleTemplateSpecializationArg(Arg, NeedsComma, Ctx, Out);
   }
@@ -341,7 +365,7 @@ static void RecursiveDenest(const DeclContext *DCtx, unsigned Count,
   if (!Named)
     return;
   const DeclContext *Prefix = DCtx->getParent();
-  if (Prefix && isa<NamedDecl>(Prefix))
+  if (isa_and_nonnull<NamedDecl>(Prefix))
     RecursiveDenest(Prefix, Count + 1, Ctx, Out);
   else if (Count > 1)
     Out << 'Q' << Count;
@@ -370,27 +394,31 @@ static bool PrintType(QualType T, const ASTContext &Ctx, raw_ostream &Out) {
   if (const ReferenceType *Ref = T.getTypePtr()->getAs<ReferenceType>()) {
     Out << 'R';
     return PrintType(Ref->getPointeeType(), Ctx, Out);
+  }
 
-  } else if (const PointerType *Ptr = T.getTypePtr()->getAs<PointerType>()) {
+  if (const PointerType *Ptr = T.getTypePtr()->getAs<PointerType>()) {
     Out << 'P';
     return PrintType(Ptr->getPointeeType(), Ctx, Out);
+  }
 
-  } else if (const TagType *Tag = T.getTypePtr()->getAs<TagType>()) {
+  if (const TagType *Tag = T.getTypePtr()->getAs<TagType>()) {
     const TagDecl *TD = Tag->getDecl();
     RecursiveDenest(getEffectiveDeclContext(TD), 2, Ctx, Out);
     PrintNamedDecl(TD, Ctx, Out);
     return true;
+  }
 
-  } else if (const MemberPointerType *MemberPtr =
-                 T.getTypePtr()->getAs<MemberPointerType>()) {
+  if (const MemberPointerType *MemberPtr =
+          T.getTypePtr()->getAs<MemberPointerType>()) {
     Out << 'M';
     const RecordType *Rec = dyn_cast<RecordType>(MemberPtr->getClass());
     if (Rec)
       RecursiveDenest(Rec->getDecl(), 1, Ctx, Out);
     return PrintType(MemberPtr->getPointeeType(), Ctx, Out);
+  }
 
-  } else if (const FunctionProtoType *Proto =
-                 T.getTypePtr()->getAs<FunctionProtoType>()) {
+  if (const FunctionProtoType *Proto =
+          T.getTypePtr()->getAs<FunctionProtoType>()) {
     Out << 'F';
     if (!Proto->getNumParams() && !Proto->isVariadic())
       Out << 'v';
@@ -404,9 +432,9 @@ static bool PrintType(QualType T, const ASTContext &Ctx, raw_ostream &Out) {
     Out << '_';
     PrintType(Proto->getReturnType(), Ctx, Out);
     return true;
+  }
 
-  } else if (const BuiltinType *Builtin =
-                 T.getTypePtr()->getAs<BuiltinType>()) {
+  if (const BuiltinType *Builtin = T.getTypePtr()->getAs<BuiltinType>()) {
     switch (Builtin->getKind()) {
     case BuiltinType::Void:
       Out << 'v';
@@ -806,6 +834,7 @@ void MacintoshMangleContextImpl::mangleCXXDtor(const CXXDestructorDecl *D,
 
 void MacintoshMangleContextImpl::mangleThunk(const CXXMethodDecl *MD,
                                              const ThunkInfo &Thunk,
+                                             bool ElideOverrideInfo,
                                              raw_ostream &Out) {
   //  <special-name> ::= T <call-offset> <base encoding>
   //                      # base is the nominal target function of thunk
@@ -829,12 +858,14 @@ void MacintoshMangleContextImpl::mangleThunk(const CXXMethodDecl *MD,
   mangleCXXName(GlobalDecl(MD), Out);
 }
 
-void MacintoshMangleContextImpl::mangleCXXDtorThunk(
-    const CXXDestructorDecl *DD, CXXDtorType Type,
-    const ThisAdjustment &ThisAdjustment, raw_ostream &Out) {
+void MacintoshMangleContextImpl::mangleCXXDtorThunk(const CXXDestructorDecl *DD,
+                                                    CXXDtorType Type,
+                                                    const ThunkInfo &Thunk,
+                                                    bool ElideOverrideInfo,
+                                                    raw_ostream &Out) {
   // Mangle the 'this' pointer adjustment.
-  MangleCallOffset(ThisAdjustment.NonVirtual,
-                   ThisAdjustment.Virtual.Itanium.VCallOffsetOffset, Out);
+  MangleCallOffset(Thunk.This.NonVirtual,
+                   Thunk.This.Virtual.Itanium.VCallOffsetOffset, Out);
   mangleCXXName(GlobalDecl(DD, Type), Out);
 }
 
@@ -863,19 +894,21 @@ void MacintoshMangleContextImpl::mangleDynamicAtExitDestructor(
 }
 
 void MacintoshMangleContextImpl::mangleSEHFilterExpression(
-    const NamedDecl *EnclosingDecl, raw_ostream &Out) {
+    GlobalDecl EnclosingDecl, raw_ostream &Out) {
+  auto *EnclosingFD = cast<FunctionDecl>(EnclosingDecl.getDecl());
   Out << "__filt_";
-  if (shouldMangleDeclName(EnclosingDecl)) {
+  if (shouldMangleDeclName(EnclosingFD)) {
   } else
-    Out << EnclosingDecl->getName();
+    Out << EnclosingFD->getName();
 }
 
-void MacintoshMangleContextImpl::mangleSEHFinallyBlock(
-    const NamedDecl *EnclosingDecl, raw_ostream &Out) {
+void MacintoshMangleContextImpl::mangleSEHFinallyBlock(GlobalDecl EnclosingDecl,
+                                                       raw_ostream &Out) {
+  auto *EnclosingFD = cast<FunctionDecl>(EnclosingDecl.getDecl());
   Out << "__fin_";
-  if (shouldMangleDeclName(EnclosingDecl)) {
+  if (shouldMangleDeclName(EnclosingFD)) {
   } else
-    Out << EnclosingDecl->getName();
+    Out << EnclosingFD->getName();
 }
 
 void MacintoshMangleContextImpl::mangleReferenceTemporary(
@@ -891,7 +924,8 @@ void MacintoshMangleContextImpl::mangleCXXRTTI(QualType Ty, raw_ostream &Out) {
 }
 
 void MacintoshMangleContextImpl::mangleCXXRTTIName(QualType Ty,
-                                                   raw_ostream &Out) {
+                                                   raw_ostream &Out,
+                                                   bool NormalizeIntegers) {
   // <special-name> ::= RTTS <type>  # typeinfo name (null terminated byte
   // string)
   Out << "__RTTS__";
@@ -954,6 +988,16 @@ void MacintoshMangleContextImpl::mangleLambdaSig(const CXXRecordDecl *Lambda,
 void MacintoshMangleContextImpl::mangleDynamicStermFinalizer(const VarDecl *D,
                                                              raw_ostream &Out) {
   llvm_unreachable("Can't mangle DynamicStermFinalizer");
+}
+
+void MacintoshMangleContextImpl::mangleCanonicalTypeName(
+    QualType T, raw_ostream &Out, bool NormalizeIntegers) {
+  PrintType(T, getASTContext(), Out);
+}
+
+void MacintoshMangleContextImpl::mangleModuleInitializer(const Module *Module,
+                                                         raw_ostream &Out) {
+  llvm_unreachable("Can't mangle ModuleInitializer");
 }
 
 MacintoshMangleContext *

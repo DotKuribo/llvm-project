@@ -2852,8 +2852,8 @@ void CodeGenFunction::InitializeVTablePointer(const VPtr &Vptr) {
     CharUnits VPtrOffset = getContext().getASTRecordLayout(Vptr.VTableClass).getVPtrOffset();
     assert(VPtrOffset.getQuantity() >= 0 && "the codewarrior abi requires a vtable offset!");
     llvm::Value *VTPtr =
-        Builder.CreateConstGEP1_32(VTableField.getPointer(), VPtrOffset / getPointerSize(), "vptr");
-    VTableField = Address(VTPtr, VTableField.getAlignment());
+        Builder.CreateConstGEP1_32(PtrTy, VTableField.getBasePointer(), VPtrOffset / getPointerSize(), "vptr");
+    VTableField = Address(VTPtr, PtrTy, VTableField.getAlignment());
   }
 
   if (auto AuthenticationInfo = CGM.getVTablePointerAuthInfo(
@@ -2952,23 +2952,24 @@ void CodeGenFunction::InitializeVTablePointers(const CXXRecordDecl *RD) {
 
 llvm::Value *CodeGenFunction::GetVTablePtr(Address This,
                                            llvm::Type *VTableTy,
-                                           const CXXRecordDecl *RD) {
+                                           const CXXRecordDecl *VTableClass,
+                                           VTableAuthMode AuthMode) {
   const bool isCodeWarriorABI =
       getContext().getTargetInfo().getCXXABI() == TargetCXXABI::CodeWarrior;
   Address VTablePtrSrc = This.withElementType(VTableTy);
   if (isCodeWarriorABI) {
-    CharUnits VPtrOffset = getContext().getASTRecordLayout(RD).getVPtrOffset();
+    CharUnits VPtrOffset = getContext().getASTRecordLayout(VTableClass).getVPtrOffset();
     assert(VPtrOffset.getQuantity() >= 0 && "the codewarrior abi requires a vtable offset!");
     llvm::Value *VTPtr =
-        Builder.CreateConstGEP1_32(VTablePtrSrc.getPointer(), VPtrOffset / getPointerSize(), "vptr");
-    VTablePtrSrc = Address(VTPtr, VTablePtrSrc.getAlignment());
+        Builder.CreateConstGEP1_32(VTableTy, VTablePtrSrc.getBasePointer(), VPtrOffset / getPointerSize(), "vptr");
+    VTablePtrSrc = Address(VTPtr, VTableTy, VTablePtrSrc.getAlignment());
   }
   llvm::Instruction *VTable = Builder.CreateLoad(VTablePtrSrc, "vtable");
   TBAAAccessInfo TBAAInfo = CGM.getTBAAVTablePtrAccessInfo(VTableTy);
   CGM.DecorateInstructionWithTBAA(VTable, TBAAInfo);
 
   if (auto AuthenticationInfo =
-          CGM.getVTablePointerAuthInfo(this, RD, This.emitRawPointer(*this))) {
+          CGM.getVTablePointerAuthInfo(this, VTableClass, This.emitRawPointer(*this))) {
     if (AuthMode != VTableAuthMode::UnsafeUbsanStrip) {
       VTable = cast<llvm::Instruction>(
           EmitPointerAuthAuth(*AuthenticationInfo, VTable));
@@ -2991,7 +2992,7 @@ llvm::Value *CodeGenFunction::GetVTablePtr(Address This,
 
   if (CGM.getCodeGenOpts().OptimizationLevel > 0 &&
       CGM.getCodeGenOpts().StrictVTablePointers)
-    CGM.DecorateInstructionWithInvariantGroup(VTable, RD);
+    CGM.DecorateInstructionWithInvariantGroup(VTable, VTableClass);
 
   return VTable;
 }
