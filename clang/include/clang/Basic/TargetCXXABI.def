@@ -32,6 +32,15 @@
 ///   http://itanium-cxx-abi.github.io/cxx-abi/
 ITANIUM_CXXABI(GenericItanium, "itanium")
 
+/// The legacy Macintosh ABI as specialized by the toolchain CodeWarrior.
+/// This is utilized for older Nintendo games targeted for the GameCube and Wii.
+///
+/// Differences from the Itanium ABI include:
+///   - declaration order dependant object VTable offsets
+///   - non-variant constructors and multi-purpose destructors
+///   - specialized symbol mangling
+ITANIUM_CXXABI(CodeWarrior, "codewarrior")
+
 /// The generic ARM ABI is a modified version of the Itanium ABI
 /// proposed by ARM for use on ARM-based platforms.
 ///
