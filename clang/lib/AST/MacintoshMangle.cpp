@@ -982,7 +982,7 @@ void MacintoshMangleContextImpl::mangleCXXDtorComdat(const CXXDestructorDecl *D,
 
 void MacintoshMangleContextImpl::mangleLambdaSig(const CXXRecordDecl *Lambda,
                                                  raw_ostream &Out) {
-  llvm_unreachable("Can't mangle LambdaSig");
+  Out << getLambdaString(Lambda);
 }
 
 void MacintoshMangleContextImpl::mangleDynamicStermFinalizer(const VarDecl *D,
