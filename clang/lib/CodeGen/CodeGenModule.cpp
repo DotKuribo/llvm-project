@@ -4636,6 +4636,9 @@ void CodeGenModule::EmitGlobal(GlobalDecl GD) {
   if (Global->hasAttr<CPUDispatchAttr>())
     return emitCPUDispatchDefinition(GD);
 
+  if (Global->hasAttr<ExternalAttr>() && EmitExternalAttrDefinition(GD))
+    return;
+
   // If this is CUDA, be selective about which declarations we emit.
   // Non-constexpr non-lambda implicit host device functions are not emitted
   // unless they are used on device side.
@@ -7165,6 +7168,63 @@ void CodeGenModule::EmitAliasDefinition(GlobalDecl GD) {
   if (isa<VarDecl>(D))
     if (CGDebugInfo *DI = getModuleDebugInfo())
       DI->EmitGlobalAlias(cast<llvm::GlobalValue>(GA->getAliasee()->stripPointerCasts()), GD);
+}
+
+bool CodeGenModule::EmitExternalAttrDefinition(GlobalDecl GD) {
+  const auto *D = cast<ValueDecl>(GD.getDecl());
+  const ExternalAttr *EA = D->getAttr<ExternalAttr>();
+  assert(EA && "Not an external definition?");
+
+  StringRef MangledName = getMangledName(GD);
+
+  // We must emit an empty definition.
+  // We're going to cheat here and just emit an alias to a symbol we make up.
+  llvm::Type *NullTy = llvm::Type::getInt8Ty(getLLVMContext());
+  auto *GV = new llvm::GlobalVariable(
+      getModule(), NullTy, /* isConstant */ false,
+      llvm::GlobalValue::InternalLinkage, llvm::Constant::getNullValue(NullTy),
+      "__clang_external_" + MangledName);
+  GV->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
+
+  SmallString<256> SectionName;
+  SectionName += ".external.";
+  SectionName += EA->getAddress();
+  GV->setSection(SectionName.str());
+
+  // Check if this is a definition.
+  if (const auto *FD = dyn_cast<FunctionDecl>(D)) {
+    if (FD->isThisDeclarationADefinition()) {
+      // This function is replaced. We must create an entry in the replace table
+      // for it. struct { Function *F; void *Addr; }
+      // __clang_external_replaced_<MangledName>;
+      llvm::Function *F = cast<llvm::Function>(GetAddrOfFunction(GD));
+      llvm::Type* PtrTy = llvm::Type::getInt8Ty(getLLVMContext())->getPointerTo();
+      llvm::StructType* StructTy = llvm::StructType::get(getLLVMContext(), {PtrTy, F->getType()}, false);
+      llvm::GlobalVariable *ReplaceEntry = new llvm::GlobalVariable(
+          getModule(),
+          StructTy,
+          /* isConstant */ false, llvm::GlobalValue::ExternalLinkage, nullptr,
+          "__clang_external_replaced_" + MangledName);
+      ReplaceEntry->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
+      ReplaceEntry->setSection("replace_array");
+      ReplaceEntry->setAlignment(getPointerAlign().getAsAlign());
+
+      llvm::Constant *Init = llvm::ConstantStruct::get(
+          StructTy, {GV, F});
+      ReplaceEntry->setInitializer(Init);
+      return false;
+    }
+  }
+
+  // This is a non-replaced external definition.
+  // Add an AliasAttr to our declaration
+  ValueDecl *VD = const_cast<ValueDecl *>(D);
+  VD->addAttr(AliasAttr::CreateImplicit(Context, GV->getName()));
+  VD->addAttr(WeakAttr::CreateImplicit(Context));
+
+  EmitAliasDefinition(GD);
+
+  return true;
 }
 
 void CodeGenModule::emitIFuncDefinition(GlobalDecl GD) {

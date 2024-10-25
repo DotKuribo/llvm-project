@@ -294,6 +294,14 @@ namespace {
           }
         }
       }
+
+      // Emit member functions with alias or ifunc attributes.
+      for (Decl *Member : D->decls()) {
+        if (auto *FD = dyn_cast<FunctionDecl>(Member)) {
+          if (FD->hasAttr<AliasAttr>() || FD->hasAttr<IFuncAttr>() || FD->hasAttr<ExternalAttr>())
+            Builder->EmitGlobal(FD);
+        }
+      }
     }
 
     void HandleTagDeclRequiredDefinition(const TagDecl *D) override {

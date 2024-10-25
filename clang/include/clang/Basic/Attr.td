@@ -1926,6 +1926,14 @@ def ExtVectorType : TypeAttr {
   let Documentation = [ExtVectorTypeDocs];
 }
 
+// Added for mkwcat project
+def External : Attr {
+  let Spellings = [Clang<"external">];
+  let Args = [StringArgument<"Address">];
+  let Subjects = SubjectList<[Function, GlobalVar], ErrorDiag>;
+  let Documentation = [Undocumented];
+}
+
 def FallThrough : StmtAttr {
   let Spellings = [CXX11<"", "fallthrough", 201603>,
                    C23<"", "fallthrough", 201910>,
