@@ -24,6 +24,7 @@
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/ASTLambda.h"
 #include "clang/AST/Attr.h"
+#include "clang/AST/Attrs.inc"
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/Expr.h"
@@ -1570,9 +1571,9 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
 
   // Generate the body of the function.
   PGO->assignRegionCounters(GD, CurFn);
-  if (isa<CXXDestructorDecl>(FD))
+  if (isa<CXXDestructorDecl>(FD) && !FD->hasAttr<NakedAttr>())
     EmitDestructorBody(Args);
-  else if (isa<CXXConstructorDecl>(FD))
+  else if (isa<CXXConstructorDecl>(FD) && !FD->hasAttr<NakedAttr>())
     EmitConstructorBody(Args);
   else if (getLangOpts().CUDA &&
            !getLangOpts().CUDAIsDevice &&
