@@ -298,8 +298,15 @@ namespace {
       // Emit member functions with alias or ifunc attributes.
       for (Decl *Member : D->decls()) {
         if (auto *FD = dyn_cast<FunctionDecl>(Member)) {
-          if (FD->hasAttr<AliasAttr>() || FD->hasAttr<IFuncAttr>() || FD->hasAttr<ExternalAttr>())
-            Builder->EmitGlobal(FD);
+          if (FD->hasAttr<AliasAttr>() || FD->hasAttr<IFuncAttr>() || FD->hasAttr<ExternalAttr>()) {
+            if (auto *CD = dyn_cast<CXXConstructorDecl>(FD)) {
+              Builder->EmitGlobal(CD);
+            } else if (auto *DD = dyn_cast<CXXDestructorDecl>(FD)) {
+              Builder->EmitGlobal(DD);
+            } else {
+              Builder->EmitGlobal(FD);
+            }
+          }
         }
       }
     }
