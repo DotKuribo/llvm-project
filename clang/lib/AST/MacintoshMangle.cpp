@@ -445,6 +445,9 @@ static bool PrintType(QualType T, const ASTContext &Ctx, raw_ostream &Out) {
     case BuiltinType::UChar:
       Out << "Uc";
       return true;
+    case BuiltinType::SChar:
+      Out << "Sc";
+      return true;
     case BuiltinType::UShort:
       Out << "Us";
       return true;
@@ -459,7 +462,6 @@ static bool PrintType(QualType T, const ASTContext &Ctx, raw_ostream &Out) {
       return true;
     case BuiltinType::Char_S:
     case BuiltinType::Char_U:
-    case BuiltinType::SChar:
       Out << 'c';
       return true;
     case BuiltinType::WChar_S:
