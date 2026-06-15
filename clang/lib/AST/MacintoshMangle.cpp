@@ -392,7 +392,10 @@ static bool PrintType(QualType T, const ASTContext &Ctx, raw_ostream &Out) {
     Out << 'V';
 
   if (const ReferenceType *Ref = T.getTypePtr()->getAs<ReferenceType>()) {
-    Out << 'R';
+    if (Ref->isRValueReferenceType())
+      Out << "RR";
+    else
+      Out << 'R';
     return PrintType(Ref->getPointeeType(), Ctx, Out);
   }
 
