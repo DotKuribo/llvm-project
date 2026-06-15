@@ -322,6 +322,7 @@ void MacintoshMangleContextImpl::MangleTemplateSpecializationArg(
   default:
     if (NeedsComma)
       Out << ',';
+    Out << '_';
     ItaniumFallback->mangleTemplateArg(Arg, Out);
     NeedsComma = true;
     break;
