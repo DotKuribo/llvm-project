@@ -137,6 +137,8 @@ public:
 
   void mangleModuleInitializer(const Module *Module, raw_ostream &) override;
 
+  void mangleTemplateArg(const TemplateArgument &Arg, raw_ostream &) override;
+
   bool getNextDiscriminator(const NamedDecl *ND, unsigned &disc) {
     // Lambda closure types are already numbered.
     if (isLambda(ND))
@@ -453,6 +455,7 @@ public:
   void mangleLambdaSig(const CXXRecordDecl *Lambda);
   void mangleModuleNamePrefix(StringRef Name, bool IsPartition = false);
   void mangleVendorQualifier(StringRef Name);
+  void mangleTemplateArg(TemplateArgument A);
   void mangleVendorType(StringRef Name);
 
 private:
@@ -6350,6 +6353,10 @@ void CXXNameMangler::mangleTemplateArg(TemplateArgManglingInfo &Info,
   mangleTemplateArg(A, ArgInfo.NeedExactType);
 }
 
+void CXXNameMangler::mangleTemplateArg(TemplateArgument A) {
+  mangleTemplateArg(A, true);
+}
+
 void CXXNameMangler::mangleTemplateArg(TemplateArgument A, bool NeedExactType) {
   // <template-arg> ::= <type>              # type or template
   //                ::= X <expression> E    # expression
@@ -7632,6 +7639,12 @@ void ItaniumMangleContextImpl::mangleModuleInitializer(const Module *M,
         StringRef(&M->Name[Partition + 1], M->Name.size() - Partition - 1),
         /*IsPartition*/ true);
   }
+}
+
+void ItaniumMangleContextImpl::mangleTemplateArg(const TemplateArgument &Arg,
+                                                 raw_ostream &Out) {
+  CXXNameMangler Mangler(*this, Out);
+  Mangler.mangleTemplateArg(Arg);
 }
 
 ItaniumMangleContext *ItaniumMangleContext::create(ASTContext &Context,

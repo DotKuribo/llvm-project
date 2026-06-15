@@ -228,6 +228,8 @@ public:
 
   virtual void mangleModuleInitializer(const Module *Module, raw_ostream &) = 0;
 
+  virtual void mangleTemplateArg(const TemplateArgument &Arg, raw_ostream &) {}
+
   // This has to live here, otherwise the CXXNameMangler won't have access to
   // it.
   virtual DiscriminatorOverrideTy getDiscriminatorOverride() const = 0;

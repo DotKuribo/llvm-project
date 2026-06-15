@@ -128,7 +128,11 @@ class MacintoshMangleContextImpl : public MacintoshMangleContext {
 public:
   explicit MacintoshMangleContextImpl(ASTContext &Context,
                                       DiagnosticsEngine &Diags)
-      : MacintoshMangleContext(Context, Diags) {}
+      : MacintoshMangleContext(Context, Diags) {
+    ItaniumFallback = ItaniumMangleContext::create(Context, Diags);
+  }
+
+  ~MacintoshMangleContextImpl() { delete ItaniumFallback; }
 
   /// @name Mangler Entry Points
   /// @{
@@ -220,6 +224,28 @@ public:
   }
 
   /// @}
+
+  ItaniumMangleContext *ItaniumFallback;
+
+private:
+  bool PrintType(QualType T, const ASTContext &Ctx, raw_ostream &Out);
+  void PrintNamedDecl(const NamedDecl *ND, const ASTContext &Ctx,
+                      raw_ostream &Out);
+  void PrintNameSpace(const NamedDecl *ND, const ASTContext &Ctx,
+                      raw_ostream &Out);
+  void MangleTemplateSpecializationArg(const TemplateArgument &Arg,
+                                       bool &NeedsComma, const ASTContext &Ctx,
+                                       raw_ostream &Out);
+  void MangleTemplateSpecialization(const TemplateArgumentList &List,
+                                    const ASTContext &Ctx, raw_ostream &Out);
+  void MangleTemplateSpecialization(
+      const DependentFunctionTemplateSpecializationInfo &List,
+      const ASTContext &Ctx, raw_ostream &Out);
+  void MangleClassTemplateSpecialization(const Decl *Decl,
+                                         const ASTContext &Ctx,
+                                         raw_ostream &Out);
+  void RecursiveDenest(const DeclContext *DCtx, unsigned Count,
+                       const ASTContext &Ctx, raw_ostream &Out);
 };
 
 } // namespace
@@ -277,12 +303,9 @@ bool MacintoshMangleContextImpl::shouldMangleCXXName(const NamedDecl *D) {
   return true;
 }
 
-static bool PrintType(QualType T, const ASTContext &Ctx, raw_ostream &Out);
-
-static void MangleTemplateSpecializationArg(const TemplateArgument &Arg,
-                                            bool &NeedsComma,
-                                            const ASTContext &Ctx,
-                                            raw_ostream &Out) {
+void MacintoshMangleContextImpl::MangleTemplateSpecializationArg(
+    const TemplateArgument &Arg, bool &NeedsComma, const ASTContext &Ctx,
+    raw_ostream &Out) {
   switch (Arg.getKind()) {
   case TemplateArgument::Type:
     if (NeedsComma)
@@ -297,13 +320,16 @@ static void MangleTemplateSpecializationArg(const TemplateArgument &Arg,
     NeedsComma = true;
     break;
   default:
+    if (NeedsComma)
+      Out << ',';
+    ItaniumFallback->mangleTemplateArg(Arg, Out);
+    NeedsComma = true;
     break;
   }
 }
 
-static void MangleTemplateSpecialization(const TemplateArgumentList &List,
-                                         const ASTContext &Ctx,
-                                         raw_ostream &Out) {
+void MacintoshMangleContextImpl::MangleTemplateSpecialization(
+    const TemplateArgumentList &List, const ASTContext &Ctx, raw_ostream &Out) {
   Out << '<';
   bool NeedsComma = false;
   for (const TemplateArgument &Arg : List.asArray())
@@ -311,7 +337,7 @@ static void MangleTemplateSpecialization(const TemplateArgumentList &List,
   Out << '>';
 }
 
-static void MangleTemplateSpecialization(
+void MacintoshMangleContextImpl::MangleTemplateSpecialization(
     const DependentFunctionTemplateSpecializationInfo &List,
     const ASTContext &Ctx, raw_ostream &Out) {
   const ASTTemplateArgumentListInfo *Info = List.TemplateArgumentsAsWritten;
@@ -328,9 +354,8 @@ static void MangleTemplateSpecialization(
   Out << '>';
 }
 
-static void MangleClassTemplateSpecialization(const Decl *Decl,
-                                              const ASTContext &Ctx,
-                                              raw_ostream &Out) {
+void MacintoshMangleContextImpl::MangleClassTemplateSpecialization(
+    const Decl *Decl, const ASTContext &Ctx, raw_ostream &Out) {
   if (const ClassTemplateSpecializationDecl *TemplateSpec =
           dyn_cast<ClassTemplateSpecializationDecl>(Decl)) {
     const TemplateArgumentList &List =
@@ -339,8 +364,9 @@ static void MangleClassTemplateSpecialization(const Decl *Decl,
   }
 }
 
-static void PrintNamedDecl(const NamedDecl *ND, const ASTContext &Ctx,
-                           raw_ostream &Out) {
+void MacintoshMangleContextImpl::PrintNamedDecl(const NamedDecl *ND,
+                                                const ASTContext &Ctx,
+                                                raw_ostream &Out) {
   std::string Str;
   llvm::raw_string_ostream Name(Str);
   Name << ND->getName();
@@ -349,8 +375,9 @@ static void PrintNamedDecl(const NamedDecl *ND, const ASTContext &Ctx,
   Out << NameStr.length() << NameStr;
 }
 
-static void PrintNameSpace(const NamedDecl *ND, const ASTContext &Ctx,
-                           raw_ostream &Out) {
+void MacintoshMangleContextImpl::PrintNameSpace(const NamedDecl *ND,
+                                                const ASTContext &Ctx,
+                                                raw_ostream &Out) {
   std::string Str;
   llvm::raw_string_ostream Name(Str);
   Name << ND->getName();
@@ -359,8 +386,10 @@ static void PrintNameSpace(const NamedDecl *ND, const ASTContext &Ctx,
   Out << NameStr.length() << NameStr;
 }
 
-static void RecursiveDenest(const DeclContext *DCtx, unsigned Count,
-                            const ASTContext &Ctx, raw_ostream &Out) {
+void MacintoshMangleContextImpl::RecursiveDenest(const DeclContext *DCtx,
+                                                 unsigned Count,
+                                                 const ASTContext &Ctx,
+                                                 raw_ostream &Out) {
   const NamedDecl *Named = dyn_cast<NamedDecl>(DCtx);
   if (!Named)
     return;
@@ -377,7 +406,8 @@ static void RecursiveDenest(const DeclContext *DCtx, unsigned Count,
   }
 }
 
-static bool PrintType(QualType T, const ASTContext &Ctx, raw_ostream &Out) {
+bool MacintoshMangleContextImpl::PrintType(QualType T, const ASTContext &Ctx,
+                                           raw_ostream &Out) {
   if (const ConstantArrayType *Array = dyn_cast_or_null<ConstantArrayType>(
           T.getTypePtr()->getAsArrayTypeUnsafe())) {
     Out << 'A';
