@@ -29,6 +29,7 @@
 #include "clang/AST/Mangle.h"
 #include "clang/AST/TypeLoc.h"
 #include "clang/Basic/ABI.h"
+#include "clang/Basic/SourceManager.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Basic/Thunk.h"
 #include "llvm/ADT/StringExtras.h"
@@ -223,6 +224,26 @@ public:
     return Name;
   }
 
+  llvm::SmallString<256> getSourceFileName(const SourceLocation &Loc,
+                                           const ASTContext &Ctx) {
+    const SourceManager &SM = Ctx.getSourceManager();
+    PresumedLoc PLoc = SM.getPresumedLoc(Loc);
+
+    // Get the final path component, or just the filename itself if it fails
+    StringRef PLFileName = llvm::sys::path::filename(PLoc.getFilename());
+    if (PLFileName.empty())
+      PLFileName = PLoc.getFilename();
+
+    // MWCC appears to allow any character except dot
+    llvm::SmallString<256> Str;
+    for (char c : PLFileName) {
+      if (c == '.')
+        c = '_';
+      Str.push_back(c);
+    }
+    return Str;
+  }
+
   /// @}
 
   ItaniumMangleContext *ItaniumFallback;
@@ -370,8 +391,27 @@ void MacintoshMangleContextImpl::PrintNamedDecl(const NamedDecl *ND,
                                                 raw_ostream &Out) {
   std::string Str;
   llvm::raw_string_ostream Name(Str);
+
   Name << ND->getName();
+  if (Str.size() == 0)
+    Name << "@class";
+
+  const NamedDecl *Parent = ND;
+  const DeclContext *DCtx = ND->getDeclContext();
+  while (Parent) {
+    if (DCtx->isFunctionOrMethod() ||
+        (!Parent->getIdentifier() && !DCtx->isNamespace())) {
+      // Anonymous parent; must have the source file name and a unique ID
+      // attached
+      Name << '$' << ND->getID() << getSourceFileName(ND->getLocation(), Ctx);
+      break;
+    }
+    DCtx = DCtx->getParent();
+    Parent = dyn_cast<NamedDecl>(DCtx);
+  }
+
   MangleClassTemplateSpecialization(ND, Ctx, Name);
+
   auto &NameStr = Name.str();
   Out << NameStr.length() << NameStr;
 }
@@ -395,14 +435,16 @@ void MacintoshMangleContextImpl::RecursiveDenest(const DeclContext *DCtx,
   if (!Named)
     return;
   const DeclContext *Prefix = DCtx->getParent();
-  if (isa_and_nonnull<NamedDecl>(Prefix))
-    RecursiveDenest(Prefix, Count + 1, Ctx, Out);
-  else if (Count > 1)
+  if (isa_and_nonnull<NamedDecl>(Prefix)) {
+    bool Counted = !Prefix->isFunctionOrMethod();
+    RecursiveDenest(Prefix, Count + (Counted ? 1 : 0), Ctx, Out);
+  } else if (Count > 1) {
     Out << 'Q' << Count;
+  }
 
   if (DCtx->isNamespace()) {
     PrintNameSpace(Named, Ctx, Out);
-  } else {
+  } else if (!DCtx->isFunctionOrMethod()) {
     PrintNamedDecl(Named, Ctx, Out);
   }
 }
