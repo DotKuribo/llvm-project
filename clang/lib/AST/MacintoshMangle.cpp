@@ -274,14 +274,14 @@ private:
 bool MacintoshMangleContextImpl::shouldMangleCXXName(const NamedDecl *D) {
   const FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
   if (FD) {
-    // Pragma patch function declarations as extern "C" aren't mangled
-    if (FD->getDeclContext()->isExternCContext())
-      return false;
-
     LanguageLinkage L = FD->getLanguageLinkage();
     // Overloadable functions need mangling.
     if (FD->hasAttr<OverloadableAttr>())
       return true;
+
+    // Pragma patch function declarations as extern "C" aren't mangled
+    if (FD->getDeclContext()->isExternCContext())
+      return false;
 
     // "main" is not mangled.
     if (FD->isMain())
