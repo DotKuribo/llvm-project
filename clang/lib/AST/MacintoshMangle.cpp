@@ -27,6 +27,7 @@
 #include "clang/AST/ExprCXX.h"
 #include "clang/AST/ExprObjC.h"
 #include "clang/AST/Mangle.h"
+#include "clang/AST/Type.h"
 #include "clang/AST/TypeLoc.h"
 #include "clang/Basic/ABI.h"
 #include "clang/Basic/SourceManager.h"
@@ -399,11 +400,12 @@ void MacintoshMangleContextImpl::PrintNamedDecl(const NamedDecl *ND,
   const NamedDecl *Parent = ND;
   const DeclContext *DCtx = ND->getDeclContext();
   while (Parent) {
-    if (DCtx->isFunctionOrMethod() ||
-        (!Parent->getIdentifier() && !DCtx->isNamespace())) {
+    if (!DCtx->isNamespace() && (DCtx->isFunctionOrMethod() ||
+                                 !Parent->getIdentifier() || Str.size() == 0)) {
       // Anonymous parent; must have the source file name and a unique ID
       // attached
-      Name << '$' << ND->getID() << getSourceFileName(ND->getLocation(), Ctx);
+      Name << '$' << Ctx.getManglingNumber(ND)
+           << getSourceFileName(ND->getLocation(), Ctx);
       break;
     }
     DCtx = DCtx->getParent();
@@ -466,7 +468,7 @@ bool MacintoshMangleContextImpl::PrintType(QualType T, const ASTContext &Ctx,
 
   if (const ReferenceType *Ref = T.getTypePtr()->getAs<ReferenceType>()) {
     if (Ref->isRValueReferenceType())
-      Out << "RR";
+      Out << 'O';
     else
       Out << 'R';
     return PrintType(Ref->getPointeeType(), Ctx, Out);
@@ -852,6 +854,10 @@ void MacintoshMangleContextImpl::mangleCXXName(GlobalDecl GD,
       MangleTemplateSpecialization(*DepArgs, getASTContext(), Out);
     Out << "__";
     RecursiveDenest(getEffectiveDeclContext(MD), 1, getASTContext(), Out);
+    if (auto rq = MD->getRefQualifier(); rq == RQ_LValue)
+      Out << 'R';
+    else if (rq == RQ_RValue)
+      Out << 'O';
     if (MD->isConst())
       Out << 'C';
     Out << 'F';
