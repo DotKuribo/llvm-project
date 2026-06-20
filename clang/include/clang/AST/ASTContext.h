@@ -3583,6 +3583,7 @@ public:
   unsigned getManglingNumber(const NamedDecl *ND,
                              bool ForAuxTarget = false) const;
   void setMWCCManglingNumber(const NamedDecl *ND);
+  unsigned getNextMWCCManglingNumber(const NamedDecl *ND);
 
   void setStaticLocalNumber(const VarDecl *VD, unsigned Number);
   unsigned getStaticLocalNumber(const VarDecl *VD) const;

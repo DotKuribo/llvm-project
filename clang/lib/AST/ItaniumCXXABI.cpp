@@ -175,6 +175,17 @@ public:
   }
 };
 
+class MacintoshNumberingContext : public ItaniumNumberingContext {
+public:
+  MacintoshNumberingContext() : ItaniumNumberingContext(nullptr) {}
+
+  unsigned getManglingNumber(const CXXMethodDecl *CallOperator) override {
+    const CXXRecordDecl *Lambda = CallOperator->getParent();
+    assert(Lambda->isLambda());
+    return Lambda->getASTContext().getNextMWCCManglingNumber(Lambda);
+  }
+};
+
 class ItaniumCXXABI : public CXXABI {
 private:
   std::unique_ptr<MangleContext> Mangler;
@@ -248,6 +259,9 @@ public:
 
   std::unique_ptr<MangleNumberingContext>
   createMangleNumberingContext() const override {
+    if (Context.getTargetInfo().getCXXABI().getKind() ==
+        TargetCXXABI::CodeWarrior)
+      return std::make_unique<MacintoshNumberingContext>();
     if (Context.getLangOpts().isSYCL())
       return std::make_unique<ItaniumSYCLNumberingContext>(
           cast<ItaniumMangleContext>(Mangler.get()));

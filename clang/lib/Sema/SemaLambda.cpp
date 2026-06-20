@@ -523,7 +523,9 @@ void Sema::handleLambdaNumbering(
 
   CXXRecordDecl::LambdaNumbering Numbering;
   if (!MCtx && (getLangOpts().CUDA || getLangOpts().SYCLIsDevice ||
-                getLangOpts().SYCLIsHost)) {
+                getLangOpts().SYCLIsHost ||
+                Context.getTargetInfo().getCXXABI().getKind() ==
+                    TargetCXXABI::CodeWarrior)) {
     // Force lambda numbering in CUDA/HIP as we need to name lambdas following
     // ODR. Both device- and host-compilation need to have a consistent naming
     // on kernel functions. As lambdas are potential part of these `__global__`

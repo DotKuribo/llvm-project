@@ -13678,6 +13678,11 @@ void ASTContext::setMWCCManglingNumber(const NamedDecl *ND) {
     Listener->AddedManglingNumber(ND, Number);
 }
 
+unsigned ASTContext::getNextMWCCManglingNumber(const NamedDecl *ND) {
+  PresumedLoc PLoc = getSourceManager().getPresumedLoc(ND->getLocation());
+  return ++MWCCLastManglingNumber[PLoc.getFileID()];
+}
+
 void ASTContext::setStaticLocalNumber(const VarDecl *VD, unsigned Number) {
   if (Number <= 1)
     return;

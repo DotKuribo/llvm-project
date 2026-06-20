@@ -196,35 +196,6 @@ public:
     };
   }
 
-  std::string getLambdaString(const CXXRecordDecl *Lambda) override {
-    // This function matches the one in MicrosoftMangle, which returns
-    // the string that is used in lambda mangled names.
-    assert(Lambda->isLambda() && "RD must be a lambda!");
-    std::string Name("<lambda");
-    Decl *LambdaContextDecl = Lambda->getLambdaContextDecl();
-    unsigned LambdaManglingNumber = Lambda->getLambdaManglingNumber();
-    unsigned LambdaId;
-    const ParmVarDecl *Parm = dyn_cast_or_null<ParmVarDecl>(LambdaContextDecl);
-    const FunctionDecl *Func =
-        Parm ? dyn_cast<FunctionDecl>(Parm->getDeclContext()) : nullptr;
-
-    if (Func) {
-      unsigned DefaultArgNo =
-          Func->getNumParams() - Parm->getFunctionScopeIndex();
-      Name += llvm::utostr(DefaultArgNo);
-      Name += "_";
-    }
-
-    if (LambdaManglingNumber)
-      LambdaId = LambdaManglingNumber;
-    else
-      LambdaId = getAnonymousStructIdForDebugInfo(Lambda);
-
-    Name += llvm::utostr(LambdaId);
-    Name += '>';
-    return Name;
-  }
-
   llvm::SmallString<256> getSourceFileName(const SourceLocation &Loc,
                                            const ASTContext &Ctx,
                                            bool EnforceAlnum = true) {
@@ -246,6 +217,24 @@ public:
       Str.push_back(c);
     }
     return Str;
+  }
+
+  std::string getLambdaString(const CXXRecordDecl *Lambda) override {
+    // The Macintosh ABI doesn't normally mangle lambdas. This is an extension
+    // based on MWCC's anonymous class style.
+    assert(Lambda->isLambda() && "RD must be a lambda!");
+    std::string Name("@lambda$");
+
+    unsigned LambdaManglingNumber = Lambda->getLambdaManglingNumber();
+    unsigned LambdaId;
+    if (LambdaManglingNumber)
+      LambdaId = LambdaManglingNumber;
+    else
+      LambdaId = getAnonymousStructIdForDebugInfo(Lambda);
+
+    Name += llvm::utostr(LambdaId);
+    Name += getSourceFileName(Lambda->getLocation(), Lambda->getASTContext());
+    return Name;
   }
 
   /// @}
@@ -394,17 +383,26 @@ void MacintoshMangleContextImpl::PrintNamedDecl(const NamedDecl *ND,
                                                 const ASTContext &Ctx,
                                                 raw_ostream &Out) {
   std::string Str;
+
+  if (const CXXRecordDecl *RD = dyn_cast<CXXRecordDecl>(ND);
+      RD && RD->isLambda()) {
+    Str = getLambdaString(RD);
+    Out << Str.length() << Str;
+    return;
+  }
+
   llvm::raw_string_ostream Name(Str);
 
   Name << ND->getName();
-  if (Str.size() == 0)
+  if (Name.str().length() == 0)
     Name << "@class";
 
   const NamedDecl *Parent = ND;
   const DeclContext *DCtx = ND->getDeclContext();
   while (Parent) {
-    if (!DCtx->isNamespace() && (DCtx->isFunctionOrMethod() ||
-                                 !Parent->getIdentifier() || Str.size() == 0)) {
+    if (!DCtx->isNamespace() &&
+        (DCtx->isFunctionOrMethod() || !Parent->getIdentifier() ||
+         Name.str().length() == 0)) {
       // Anonymous parent; must have the source file name and a unique ID
       // attached
       Name << '$' << Ctx.getManglingNumber(ND)
