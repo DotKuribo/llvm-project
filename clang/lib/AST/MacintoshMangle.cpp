@@ -471,7 +471,7 @@ bool MacintoshMangleContextImpl::PrintType(QualType T, const ASTContext &Ctx,
 
   if (const ReferenceType *Ref = T.getTypePtr()->getAs<ReferenceType>()) {
     if (Ref->isRValueReferenceType())
-      Out << "RR";
+      Out << "RR"; // Not handled by Macintosh ABI normally
     else
       Out << 'R';
     return PrintType(Ref->getPointeeType(), Ctx, Out);
@@ -860,9 +860,11 @@ void MacintoshMangleContextImpl::mangleCXXName(GlobalDecl GD,
     if (auto rq = MD->getRefQualifier(); rq == RQ_LValue)
       Out << 'R';
     else if (rq == RQ_RValue)
-      Out << "RR";
+      Out << "RR"; // Not handled by the Macintosh ABI normally
     if (MD->isConst())
       Out << 'C';
+    if (MD->isExplicitObjectMemberFunction())
+      Out << 'E'; // Not handled by the Macintosh ABI normally
     Out << 'F';
 
     if (MD->param_empty() && !MD->isVariadic())
