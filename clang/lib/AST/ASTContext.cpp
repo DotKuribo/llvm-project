@@ -13666,6 +13666,18 @@ unsigned ASTContext::getManglingNumber(const NamedDecl *ND,
   return Res > 1 ? Res : 1;
 }
 
+void ASTContext::setMWCCManglingNumber(const NamedDecl *ND) {
+  if (MangleNumbers.contains(ND))
+    return;
+
+  PresumedLoc PLoc = getSourceManager().getPresumedLoc(ND->getLocation());
+  unsigned Number = ++MWCCLastManglingNumber[PLoc.getFileID()];
+  MangleNumbers[ND] = Number;
+
+  if (Listener)
+    Listener->AddedManglingNumber(ND, Number);
+}
+
 void ASTContext::setStaticLocalNumber(const VarDecl *VD, unsigned Number) {
   if (Number <= 1)
     return;

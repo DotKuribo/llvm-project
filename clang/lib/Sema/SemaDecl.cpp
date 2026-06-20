@@ -5064,6 +5064,12 @@ void Sema::handleTagNumbering(const TagDecl *Tag, Scope *TagScope) {
   if (!Context.getLangOpts().CPlusPlus)
     return;
 
+  if (Context.getTargetInfo().getCXXABI().getKind() ==
+      TargetCXXABI::CodeWarrior) {
+    Context.setMWCCManglingNumber(Tag);
+    return;
+  }
+
   if (isa<CXXRecordDecl>(Tag->getParent())) {
     // If this tag is the direct child of a class, number it if
     // it is anonymous.

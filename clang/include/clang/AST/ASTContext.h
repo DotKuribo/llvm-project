@@ -691,6 +691,9 @@ private:
   mutable llvm::DenseMap<const CXXRecordDecl *, unsigned>
       DeviceLambdaManglingNumbers;
 
+  /// Track the current Macintosh mangling number per-file.
+  llvm::DenseMap<FileID, unsigned> MWCCLastManglingNumber;
+
   /// Mapping that stores parameterIndex values for ParmVarDecls when
   /// that value exceeds the bitfield size of ParmVarDeclBits.ParameterIndex.
   using ParameterIndexTable = llvm::DenseMap<const VarDecl *, unsigned>;
@@ -3579,6 +3582,7 @@ public:
   void setManglingNumber(const NamedDecl *ND, unsigned Number);
   unsigned getManglingNumber(const NamedDecl *ND,
                              bool ForAuxTarget = false) const;
+  void setMWCCManglingNumber(const NamedDecl *ND);
 
   void setStaticLocalNumber(const VarDecl *VD, unsigned Number);
   unsigned getStaticLocalNumber(const VarDecl *VD) const;

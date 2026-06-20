@@ -226,7 +226,8 @@ public:
   }
 
   llvm::SmallString<256> getSourceFileName(const SourceLocation &Loc,
-                                           const ASTContext &Ctx) {
+                                           const ASTContext &Ctx,
+                                           bool EnforceAlnum = true) {
     const SourceManager &SM = Ctx.getSourceManager();
     PresumedLoc PLoc = SM.getPresumedLoc(Loc);
 
@@ -235,11 +236,13 @@ public:
     if (PLFileName.empty())
       PLFileName = PLoc.getFilename();
 
-    // MWCC appears to allow any character except dot
     llvm::SmallString<256> Str;
     for (char c : PLFileName) {
+      if (EnforceAlnum && !llvm::isAlnum(c))
+        c = '_';
       if (c == '.')
         c = '_';
+
       Str.push_back(c);
     }
     return Str;
@@ -468,7 +471,7 @@ bool MacintoshMangleContextImpl::PrintType(QualType T, const ASTContext &Ctx,
 
   if (const ReferenceType *Ref = T.getTypePtr()->getAs<ReferenceType>()) {
     if (Ref->isRValueReferenceType())
-      Out << 'O';
+      Out << "RR";
     else
       Out << 'R';
     return PrintType(Ref->getPointeeType(), Ctx, Out);
@@ -857,7 +860,7 @@ void MacintoshMangleContextImpl::mangleCXXName(GlobalDecl GD,
     if (auto rq = MD->getRefQualifier(); rq == RQ_LValue)
       Out << 'R';
     else if (rq == RQ_RValue)
-      Out << 'O';
+      Out << "RR";
     if (MD->isConst())
       Out << 'C';
     Out << 'F';
