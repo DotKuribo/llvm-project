@@ -410,7 +410,7 @@ void MacintoshMangleContextImpl::PrintNamedDecl(const NamedDecl *ND,
       break;
     }
     DCtx = DCtx->getParent();
-    Parent = dyn_cast<NamedDecl>(DCtx);
+    Parent = dyn_cast_or_null<NamedDecl>(DCtx);
   }
 
   MangleClassTemplateSpecialization(ND, Ctx, Name);
