@@ -858,9 +858,11 @@ void CGRecordLowering::computeVolatileBitfields() {
 
 void CGRecordLowering::accumulateVPtrs() {
   if (Layout.hasOwnVFPtr())
-    Members.push_back(
-        MemberInfo(CharUnits::Zero(), MemberInfo::VFPtr,
-                   llvm::PointerType::getUnqual(Types.getLLVMContext())));
+    Members.push_back(MemberInfo(
+        Layout.getVPtrOffset() >= CharUnits::Zero() ? Layout.getVPtrOffset()
+                                                    : CharUnits::Zero(),
+        MemberInfo::VFPtr,
+        llvm::PointerType::getUnqual(Types.getLLVMContext())));
   if (Layout.hasOwnVBPtr())
     Members.push_back(
         MemberInfo(Layout.getVBPtrOffset(), MemberInfo::VBPtr,

@@ -114,6 +114,9 @@ public:
 
     case Microsoft:
       return T.isKnownWindowsMSVCEnvironment();
+
+    case CodeWarrior:
+      return T.isPPC();
     }
     llvm_unreachable("invalid CXXABI kind");
   }
@@ -169,6 +172,7 @@ public:
       //       the this adjustment, so they don't require functions to have any
       //       special alignment and could therefore also return false.
     case GenericItanium:
+    case CodeWarrior:
     case iOS:
     case WatchOS:
     case Microsoft:
@@ -192,6 +196,8 @@ public:
   /// Does this ABI have different entrypoints for complete-object
   /// and base-subobject constructors?
   bool hasConstructorVariants() const {
+    if (getKind() == CodeWarrior)
+      return false;
     return isItaniumFamily();
   }
 
@@ -246,6 +252,7 @@ public:
 
     case GenericAArch64:
     case GenericItanium:
+    case CodeWarrior:
     case iOS:   // old iOS compilers did not follow this rule
     case Microsoft:
     case GenericMIPS:
@@ -283,6 +290,7 @@ public:
     // permanently locked the definition of POD to the rules of C++ TR1,
     // and that trickles down to derived ABIs.
     case GenericItanium:
+    case CodeWarrior:
     case GenericAArch64:
     case GenericARM:
     case iOS:

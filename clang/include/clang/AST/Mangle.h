@@ -310,6 +310,15 @@ public:
   create(ASTContext &Context, DiagnosticsEngine &Diags, bool IsAux = false);
 };
 
+class MacintoshMangleContext : public ItaniumMangleContext {
+public:
+  explicit MacintoshMangleContext(ASTContext &C, DiagnosticsEngine &D)
+      : ItaniumMangleContext(C, D) {}
+
+  static MacintoshMangleContext *create(ASTContext &Context,
+                                        DiagnosticsEngine &Diags);
+};
+
 class ASTNameGenerator {
 public:
   explicit ASTNameGenerator(ASTContext &Ctx);

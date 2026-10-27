@@ -306,6 +306,7 @@ public:
     Fuchsia,
     IOS,
     KFreeBSD,
+    Kuribo,
     Linux,
     Lv2, // PS3
     MacOSX,
@@ -1262,6 +1263,11 @@ public:
     return Env == llvm::Triple::GNUEABIHF ||
            Env == llvm::Triple::GNUEABIHFT64 ||
            Env == llvm::Triple::MuslEABIHF || Env == llvm::Triple::EABIHF;
+  }
+
+  bool isOSCodeWarrior() const {
+    return getArch() == Triple::ppc &&
+           getOS() == Triple::Kuribo;
   }
 
   /// Tests whether the target supports comdat

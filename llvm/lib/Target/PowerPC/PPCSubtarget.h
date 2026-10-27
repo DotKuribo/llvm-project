@@ -212,6 +212,8 @@ public:
   bool is32BitELFABI() const { return isSVR4ABI() && !isPPC64(); }
   bool isUsingPCRelativeCalls() const;
 
+  bool isCodeWarrior() const { return TargetTriple.isOSCodeWarrior(); }
+
   /// Originally, this function return hasISEL(). Now we always enable it,
   /// but may expand the ISEL instruction later.
   bool enableEarlyIfConversion() const override { return true; }

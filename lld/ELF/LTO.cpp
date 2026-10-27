@@ -63,8 +63,8 @@ static lto::Config createConfig(Ctx &ctx) {
     c.MllvmArgs.emplace_back(C.str());
 
   // Always emit a section per function/datum with LTO.
-  c.Options.FunctionSections = true;
-  c.Options.DataSections = true;
+  c.Options.FunctionSections = false;
+  c.Options.DataSections = false;
 
   // Check if basic block sections must be used.
   // Allowed values for --lto-basic-block-sections are "all",

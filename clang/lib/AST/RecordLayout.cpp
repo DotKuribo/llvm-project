@@ -46,13 +46,13 @@ ASTRecordLayout::ASTRecordLayout(
     const ASTContext &Ctx, CharUnits size, CharUnits alignment,
     CharUnits preferredAlignment, CharUnits unadjustedAlignment,
     CharUnits requiredAlignment, bool hasOwnVFPtr, bool hasExtendableVFPtr,
-    CharUnits vbptroffset, CharUnits datasize, ArrayRef<uint64_t> fieldoffsets,
-    CharUnits nonvirtualsize, CharUnits nonvirtualalignment,
-    CharUnits preferrednvalignment, CharUnits SizeOfLargestEmptySubobject,
-    const CXXRecordDecl *PrimaryBase, bool IsPrimaryBaseVirtual,
-    const CXXRecordDecl *BaseSharingVBPtr, bool EndsWithZeroSizedObject,
-    bool LeadsWithZeroSizedBase, const BaseOffsetsMapTy &BaseOffsets,
-    const VBaseOffsetsMapTy &VBaseOffsets)
+    CharUnits vbptroffset, CharUnits vptroffset, CharUnits datasize,
+    ArrayRef<uint64_t> fieldoffsets, CharUnits nonvirtualsize,
+    CharUnits nonvirtualalignment, CharUnits preferrednvalignment,
+    CharUnits SizeOfLargestEmptySubobject, const CXXRecordDecl *PrimaryBase,
+    bool IsPrimaryBaseVirtual, const CXXRecordDecl *BaseSharingVBPtr,
+    bool EndsWithZeroSizedObject, bool LeadsWithZeroSizedBase,
+    const BaseOffsetsMapTy &BaseOffsets, const VBaseOffsetsMapTy &VBaseOffsets)
     : Size(size), DataSize(datasize), Alignment(alignment),
       PreferredAlignment(preferredAlignment),
       UnadjustedAlignment(unadjustedAlignment),
@@ -70,22 +70,23 @@ ASTRecordLayout::ASTRecordLayout(
   CXXInfo->VBaseOffsets = VBaseOffsets;
   CXXInfo->HasOwnVFPtr = hasOwnVFPtr;
   CXXInfo->VBPtrOffset = vbptroffset;
+  CXXInfo->VPtrOffset = vptroffset;
   CXXInfo->HasExtendableVFPtr = hasExtendableVFPtr;
   CXXInfo->BaseSharingVBPtr = BaseSharingVBPtr;
   CXXInfo->EndsWithZeroSizedObject = EndsWithZeroSizedObject;
   CXXInfo->LeadsWithZeroSizedBase = LeadsWithZeroSizedBase;
 
 #ifndef NDEBUG
-    if (const CXXRecordDecl *PrimaryBase = getPrimaryBase()) {
-      if (isPrimaryBaseVirtual()) {
-        if (Ctx.getTargetInfo().getCXXABI().hasPrimaryVBases()) {
-          assert(getVBaseClassOffset(PrimaryBase).isZero() &&
-                 "Primary virtual base must be at offset 0!");
-        }
-      } else {
-        assert(getBaseClassOffset(PrimaryBase).isZero() &&
-               "Primary base must be at offset 0!");
+  if (const CXXRecordDecl *PrimaryBase = getPrimaryBase()) {
+    if (isPrimaryBaseVirtual()) {
+      if (Ctx.getTargetInfo().getCXXABI().hasPrimaryVBases()) {
+        assert(getVBaseClassOffset(PrimaryBase).isZero() &&
+               "Primary virtual base must be at offset 0!");
       }
+    } else {
+      assert(getBaseClassOffset(PrimaryBase).isZero() &&
+             "Primary base must be at offset 0!");
     }
+  }
 #endif
 }

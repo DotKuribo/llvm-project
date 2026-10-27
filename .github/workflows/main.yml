@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build_llvm:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macOS-latest
+        cmake_args:
+          - "-DLLVM_TARGETS_TO_BUILD=PowerPC -DLLVM_ENABLE_PROJECTS=clang"
+    steps:
+    - name: Setup Windows
+      if: startsWith(matrix.os, 'windows')
+      uses: llvm/actions/setup-windows@main
+      with:
+        arch: amd64
+      
+    - name: Install Ninja
+      uses: llvm/actions/install-ninja@main
+      with:
+        os: ${{ runner.os }}
+        
+    - name: Download source code
+      uses: actions/checkout@v2
+      with:
+        path: llvm-project
+    
+    - name: Build
+      run: |
+        cd llvm-project
+        mkdir build
+        mkdir build/bin
+        cd build
+        cmake -G Ninja -DCMAKE_BUILD_TYPE=Release ${{ matrix.cmake_args }} ../llvm
+        cmake --build .
+    
+    - name: Upload that sucker
+      uses: actions/upload-artifact@v2.2.4
+      with:
+        name: build-${{ runner.os }}
+        path: llvm-project/build/bin
