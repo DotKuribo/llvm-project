@@ -3030,6 +3030,19 @@ defset list<RuntimeLibcallImpl> PPC32AIXCallList = {
   def ___strstr : RuntimeLibcallImpl<STRSTR>;
 }
 
+// CodeWarrior runtime helpers, selected for powerpc-*-kuribo by
+// PPCSubtarget::initLibcallLoweringInfo.
+def __div2i : RuntimeLibcallImpl<SDIV_I64>;
+def __div2u : RuntimeLibcallImpl<UDIV_I64>;
+def __cvt_dbl_usll_fptosi_f32 : RuntimeLibcallImpl<FPTOSINT_F32_I64, "__cvt_dbl_usll">;
+def __cvt_dbl_usll_fptosi_f64 : RuntimeLibcallImpl<FPTOSINT_F64_I64, "__cvt_dbl_usll">;
+def __cvt_dbl_usll_fptoui_f32 : RuntimeLibcallImpl<FPTOUINT_F32_I64, "__cvt_dbl_usll">;
+def __cvt_dbl_usll_fptoui_f64 : RuntimeLibcallImpl<FPTOUINT_F64_I64, "__cvt_dbl_usll">;
+def __cvt_sll_flt : RuntimeLibcallImpl<SINTTOFP_I64_F32>;
+def __cvt_sll_dbl : RuntimeLibcallImpl<SINTTOFP_I64_F64>;
+def __cvt_ull_flt : RuntimeLibcallImpl<UINTTOFP_I64_F32>;
+def __cvt_ull_dbl : RuntimeLibcallImpl<UINTTOFP_I64_F64>;
+
 defvar PPCOverrides = !foreach(entry, PPCRuntimeLibcalls, entry.Provides);
 
 def isPPC : RuntimeLibcallPredicate<"TT.isPPC()">;

@@ -20,6 +20,7 @@
 #include "PPCTargetMachine.h"
 #include "llvm/CodeGen/GlobalISel/InstructionSelect.h"
 #include "llvm/CodeGen/GlobalISel/InstructionSelector.h"
+#include "llvm/CodeGen/LibcallLoweringInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineScheduler.h"
 #include "llvm/IR/GlobalAlias.h"
@@ -189,6 +190,23 @@ bool PPCSubtarget::useAA() const {
 }
 
 bool PPCSubtarget::enableSubRegLiveness() const { return true; }
+
+void PPCSubtarget::initLibcallLoweringInfo(LibcallLoweringInfo &Info) const {
+  if (!isCodeWarrior())
+    return;
+
+  // CodeWarrior runtime helpers for 64-bit division and conversions.
+  Info.setLibcallImpl(RTLIB::SDIV_I64, RTLIB::impl___div2i);
+  Info.setLibcallImpl(RTLIB::UDIV_I64, RTLIB::impl___div2u);
+  Info.setLibcallImpl(RTLIB::FPTOSINT_F32_I64, RTLIB::impl___cvt_dbl_usll_fptosi_f32);
+  Info.setLibcallImpl(RTLIB::FPTOSINT_F64_I64, RTLIB::impl___cvt_dbl_usll_fptosi_f64);
+  Info.setLibcallImpl(RTLIB::FPTOUINT_F32_I64, RTLIB::impl___cvt_dbl_usll_fptoui_f32);
+  Info.setLibcallImpl(RTLIB::FPTOUINT_F64_I64, RTLIB::impl___cvt_dbl_usll_fptoui_f64);
+  Info.setLibcallImpl(RTLIB::SINTTOFP_I64_F32, RTLIB::impl___cvt_sll_flt);
+  Info.setLibcallImpl(RTLIB::SINTTOFP_I64_F64, RTLIB::impl___cvt_sll_dbl);
+  Info.setLibcallImpl(RTLIB::UINTTOFP_I64_F32, RTLIB::impl___cvt_ull_flt);
+  Info.setLibcallImpl(RTLIB::UINTTOFP_I64_F64, RTLIB::impl___cvt_ull_dbl);
+}
 
 bool PPCSubtarget::isGVIndirectSymbol(const GlobalValue *GV) const {
   if (isAIXABI()) {

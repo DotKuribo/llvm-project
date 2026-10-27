@@ -1286,7 +1286,7 @@ private:
 public:
   /// Component indices of the first component of each of the vtables in the
   /// vtable group.
-  SmallVector<size_t, 4> VTableIndices;
+  VTableLayout::VTableIndicesTy VTableIndices;
   SmallVector<size_t, 4> VTableIndicesTemp;
 
   CodeWarriorVtableBuilder(ItaniumVTableContext &VTables,
@@ -4435,7 +4435,7 @@ ThisAdjustment CodeWarriorVtableBuilder::ComputeThisAdjustment(
       // We don't have vcall offsets for this virtual base, go ahead and
       // build them.
       VCallAndVBaseOffsetBuilder Builder(
-          VTables, MostDerivedClass, MostDerivedClass,
+          MostDerivedClass, MostDerivedClass,
           /*Overriders=*/nullptr,
           BaseSubobject(Offset.VirtualBase, CharUnits::Zero()),
           /*BaseIsVirtual=*/true,
@@ -4756,7 +4756,7 @@ void CodeWarriorVtableBuilder::LayoutPrimaryAndSecondaryVTables(
   VTableIndicesTemp.push_back(VTableIndex);
   // Add vcall and vbase offsets for this vtable.
   VCallAndVBaseOffsetBuilder Builder(
-      VTables, MostDerivedClass, LayoutClass, &Overriders, Base,
+      MostDerivedClass, LayoutClass, &Overriders, Base,
       BaseIsVirtualInLayoutClass, OffsetInLayoutClass);
   Components.append(Builder.components_begin(), Builder.components_end());
 

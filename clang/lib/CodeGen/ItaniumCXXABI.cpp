@@ -600,7 +600,8 @@ public:
   llvm::Value *EmitVirtualDestructorCall(CodeGenFunction &CGF,
                                          const CXXDestructorDecl *Dtor,
                                          CXXDtorType DtorType, Address This,
-                                         DeleteOrMemberCallExpr E) override;
+                                         DeleteOrMemberCallExpr E,
+                                         llvm::CallBase **CallOrInvoke) override;
 
   llvm::Value *getCXXDestructorImplicitParam(CodeGenFunction &CGF,
                                              const CXXDestructorDecl *DD,
@@ -5856,9 +5857,9 @@ void MacintoshCXXABI::EmitDestructorCall(CodeGenFunction &CGF,
 
 llvm::Value *MacintoshCXXABI::EmitVirtualDestructorCall(
     CodeGenFunction &CGF, const CXXDestructorDecl *Dtor, CXXDtorType DtorType,
-    Address This, DeleteOrMemberCallExpr E) {
-  auto *CE = E.dyn_cast<const CXXMemberCallExpr *>();
-  auto *D = E.dyn_cast<const CXXDeleteExpr *>();
+    Address This, DeleteOrMemberCallExpr E, llvm::CallBase **CallOrInvoke) {
+  auto *CE = dyn_cast<const CXXMemberCallExpr *>(E);
+  auto *D = dyn_cast<const CXXDeleteExpr *>(E);
   assert((CE != nullptr) ^ (D != nullptr));
   assert(CE == nullptr || CE->arg_begin() == CE->arg_end());
   assert(DtorType == Dtor_Deleting || DtorType == Dtor_Complete);
@@ -5879,7 +5880,7 @@ llvm::Value *MacintoshCXXABI::EmitVirtualDestructorCall(
     ThisTy = D->getDestroyedType();
   }
   CGF.EmitCXXDestructorCall(GD, Callee, This.getBasePointer(), ThisTy, Deleting,
-                            DeletingTy, nullptr);
+                            DeletingTy, nullptr, CallOrInvoke);
   return nullptr;
 }
 

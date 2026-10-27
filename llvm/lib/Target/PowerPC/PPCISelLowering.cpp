@@ -1451,28 +1451,6 @@ PPCTargetLowering::PPCTargetLowering(const PPCTargetMachine &TM,
     setBooleanVectorContents(ZeroOrNegativeOneBooleanContent);
   }
 
-  if (Subtarget.isCodeWarrior()) {
-    static const struct {
-      const RTLIB::Libcall Op;
-      const char * const Name;
-    } LibraryCalls[] = {
-        { RTLIB::SDIV_I64, "__div2i" },
-        { RTLIB::UDIV_I64, "__div2u" },
-        { RTLIB::FPTOSINT_F32_I64, "__cvt_dbl_usll" },
-        { RTLIB::FPTOSINT_F64_I64, "__cvt_dbl_usll" },
-        { RTLIB::FPTOUINT_F32_I64, "__cvt_dbl_usll" },
-        { RTLIB::FPTOUINT_F64_I64, "__cvt_dbl_usll" },
-        { RTLIB::SINTTOFP_I64_F32, "__cvt_sll_flt" },
-        { RTLIB::SINTTOFP_I64_F64, "__cvt_sll_dbl" },
-        { RTLIB::UINTTOFP_I64_F32, "__cvt_ull_flt" },
-        { RTLIB::UINTTOFP_I64_F64, "__cvt_ull_dbl" },
-    };
-
-    for (const auto &LC : LibraryCalls) {
-      setLibcallName(LC.Op, LC.Name);
-    }
-  }
-
   if (shouldInlineQuadwordAtomics())
     setMaxAtomicSizeInBitsSupported(128);
   else if (isPPC64)

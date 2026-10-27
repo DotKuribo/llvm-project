@@ -191,7 +191,7 @@ public:
   void mangleModuleInitializer(const Module *Module, raw_ostream &) override;
 
   virtual DiscriminatorOverrideTy getDiscriminatorOverride() const override {
-    return [](ASTContext &, const NamedDecl *) -> std::optional<unsigned> {
+    return [](ASTContext &, const NamedDecl *) -> UnsignedOrNone {
       return std::nullopt;
     };
   }
@@ -490,9 +490,8 @@ bool MacintoshMangleContextImpl::PrintType(QualType T, const ASTContext &Ctx,
   if (const MemberPointerType *MemberPtr =
           T.getTypePtr()->getAs<MemberPointerType>()) {
     Out << 'M';
-    const RecordType *Rec = dyn_cast<RecordType>(MemberPtr->getClass());
-    if (Rec)
-      RecursiveDenest(Rec->getDecl(), 1, Ctx, Out);
+    if (const CXXRecordDecl *RD = MemberPtr->getMostRecentCXXRecordDecl())
+      RecursiveDenest(RD, 1, Ctx, Out);
     return PrintType(MemberPtr->getPointeeType(), Ctx, Out);
   }
 
