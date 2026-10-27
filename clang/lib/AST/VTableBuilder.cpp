@@ -4298,9 +4298,16 @@ void CodeWarriorVtableBuilder::ComputeThisAdjustments() {
     if (ThisAdjustment.isEmpty())
       continue;
 
-    // Add it.
-    VTableThunks[VTableIndex].This = ThisAdjustment;
-
+    // Add it. Thunk emission also needs the method that created the vtable
+    // entry and its 'this' type; keep any already recorded for a return
+    // adjustment.
+    auto [It, Inserted] = VTableThunks.try_emplace(VTableIndex);
+    if (Inserted) {
+      const CXXMethodDecl *Method = VTables.findOriginalMethodInMap(MD);
+      It->second.Method = Method;
+      It->second.ThisType = Method->getThisType().getTypePtr();
+    }
+    It->second.This = ThisAdjustment;
   }
 
   /// Clear the method info map.
@@ -4717,8 +4724,16 @@ void CodeWarriorVtableBuilder::AddMethods(
 
     ReturnAdjustment ReturnAdjustment =
       ComputeReturnAdjustment(ReturnAdjustmentOffset);
-    
-     AddMethod(Overrider.Method, ReturnAdjustment);
+
+    // If a return adjustment is required, record the method that created the
+    // vtable entry and its 'this' type for thunk emission.
+    if (!ReturnAdjustment.isEmpty()) {
+      auto &VTT = VTableThunks[Components.size()];
+      VTT.Method = MD;
+      VTT.ThisType = MD->getThisType().getTypePtr();
+    }
+
+    AddMethod(Overrider.Method, ReturnAdjustment);
   }
 
 }
