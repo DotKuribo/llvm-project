@@ -56,6 +56,20 @@ PPCLinuxToolChain::PPCLinuxToolChain(const Driver &D,
   }
 }
 
+void PPCLinuxToolChain::addClangTargetOptions(
+    const ArgList &DriverArgs, ArgStringList &CC1Args, BoundArch BA,
+    Action::OffloadKind DeviceOffloadKind) const {
+  Linux::addClangTargetOptions(DriverArgs, CC1Args, BA, DeviceOffloadKind);
+
+  // The CodeWarrior runtime used on Kuribo targets has no sized operator
+  // delete, so only pass "-fno-sized-deallocation" when the user hasn't
+  // manually enabled or disabled sized deallocations.
+  if (getTriple().getOS() == llvm::Triple::Kuribo &&
+      !DriverArgs.hasArgNoClaim(options::OPT_fsized_deallocation,
+                                options::OPT_fno_sized_deallocation))
+    CC1Args.push_back("-fno-sized-deallocation");
+}
+
 void PPCLinuxToolChain::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
                                                   ArgStringList &CC1Args) const {
   if (!DriverArgs.hasArg(options::OPT_nostdinc) &&
