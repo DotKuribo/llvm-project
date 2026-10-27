@@ -817,7 +817,7 @@ CGCallee ItaniumCXXABI::EmitLoadOfMemberFunctionPointer(
     // virtual function.
 
     llvm::Value *IsVirtual = Builder.CreateICmpSGT(
-        VTableAdj, llvm::ConstantInt::get(CGM.PtrDiffTy, -1));
+        VTableAdj, llvm::ConstantInt::getSigned(CGM.PtrDiffTy, -1));
     Builder.CreateCondBr(IsVirtual, FnVirtual, FnNonVirtual);
   }
 
@@ -1379,9 +1379,9 @@ llvm::Constant *ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
              "the codewarrior abi requires a vtable offset!");
 
       MemPtr[0] =
-          llvm::ConstantInt::get(CGM.PtrDiffTy, ThisAdjustment.getQuantity());
+          llvm::ConstantInt::getSigned(CGM.PtrDiffTy, ThisAdjustment.getQuantity());
       MemPtr[1] =
-          llvm::ConstantInt::get(CGM.PtrDiffTy, VPtrOffset.getQuantity());
+          llvm::ConstantInt::getSigned(CGM.PtrDiffTy, VPtrOffset.getQuantity());
       MemPtr[2] = llvm::ConstantInt::get(CGM.PtrDiffTy, VTableOffset + 4 * 2);
 
       return llvm::ConstantStruct::getAnon(MemPtr);
@@ -1392,7 +1392,7 @@ llvm::Constant *ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
       //   represented as a ptrdiff_t.
       MemPtr[0] = llvm::ConstantInt::get(CGM.PtrDiffTy, VTableOffset + 1);
       MemPtr[1] =
-          llvm::ConstantInt::get(CGM.PtrDiffTy, ThisAdjustment.getQuantity());
+          llvm::ConstantInt::getSigned(CGM.PtrDiffTy, ThisAdjustment.getQuantity());
     }
   } else {
     const FunctionProtoType *FPT = MD->getType()->castAs<FunctionProtoType>();
@@ -1413,8 +1413,8 @@ llvm::Constant *ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
       llvm::Constant *MemPtr[3];
 
       MemPtr[0] =
-          llvm::ConstantInt::get(CGM.PtrDiffTy, ThisAdjustment.getQuantity());
-      MemPtr[1] = llvm::ConstantInt::get(CGM.PtrDiffTy, -1);
+          llvm::ConstantInt::getSigned(CGM.PtrDiffTy, ThisAdjustment.getQuantity());
+      MemPtr[1] = llvm::ConstantInt::getSigned(CGM.PtrDiffTy, -1);
       MemPtr[2] = llvm::ConstantExpr::getPtrToInt(addr, CGM.PtrDiffTy);
 
       return llvm::ConstantStruct::getAnon(MemPtr);
@@ -5789,7 +5789,7 @@ MacintoshCXXABI::getVTableAddressPoint(BaseSubobject Base,
   llvm::Value *Indices[] = {
       llvm::ConstantInt::get(CGM.Int32Ty, 0),
       llvm::ConstantInt::get(CGM.Int32Ty, AddressPoint.VTableIndex),
-      llvm::ConstantInt::get(CGM.Int32Ty, AddressPoint.AddressPointIndex - 2),
+      llvm::ConstantInt::getSigned(CGM.Int32Ty, AddressPoint.AddressPointIndex - 2),
   };
 
   return llvm::ConstantExpr::getGetElementPtr(
